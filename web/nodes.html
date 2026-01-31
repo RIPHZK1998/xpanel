@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Node Management - xPanel</title>
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>xPanel</h2>
+            </div>
+            <nav class="sidebar-nav" id="sidebarNav"></nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">👤</div>
+                    <div class="user-details">
+                        <div class="user-name" id="userEmailSidebar">Admin</div>
+                        <div class="user-role" id="userRoleSidebar">Administrator</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-header">
+                <h1>Node Management</h1>
+                <div style="display: flex; align-items: center; gap: var(--space-md);">
+                    <button class="btn btn-secondary" onclick="loadNodes()">🔄 Refresh</button>
+                    <button class="btn btn-primary" onclick="showAddNodeModal()">+ Add Node</button>
+                    <div style="border-left: 1px solid var(--border); height: 24px; margin: 0 var(--space-xs);"></div>
+                    <span id="userEmail" style="color: var(--text-secondary); font-size: 0.875rem;"></span>
+                    <button class="btn btn-secondary btn-sm" onclick="api.logout()">
+                        <span>🚪</span> Logout
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3>All Nodes</h3>
+                </div>
+                <div class="card-body">
+                    <div class="nodes-grid" id="nodesGrid">
+                        <p style="text-align: center; color: var(--text-muted);">Loading nodes...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Node Modal -->
+    <div id="nodeModal" class="modal hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">Add Node</h3>
+                <button class="modal-close" onclick="closeNodeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="nodeForm">
+                    <input type="hidden" id="nodeId">
+
+                    <!-- Node ID Display (visible when editing) -->
+                    <div class="form-group" id="nodeIdDisplay" style="display: none;">
+                        <label class="form-label">Node ID</label>
+                        <input type="text" class="input" id="nodeIdReadonly" readonly
+                            style="background: var(--bg-tertiary); cursor: not-allowed;">
+                    </div>
+
+                    <!-- Basic Information Section -->
+                    <div class="modal-section">
+                        <div class="modal-section-header">
+                            <h4 class="modal-section-title">
+                                <span class="icon">📋</span>
+                                Basic Information
+                            </h4>
+                        </div>
+                        <div class="modal-section-body">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">Node Name</label>
+                                    <input type="text" class="input" id="nodeName" placeholder="US-West-1" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Protocol</label>
+                                    <select class="select" id="nodeProtocol" onchange="handleProtocolChange()">
+                                        <option value="vless">VLESS</option>
+                                        <option value="vmess">VMess</option>
+                                        <option value="trojan">Trojan</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Address (Domain/IP)</label>
+                                    <input type="text" class="input" id="nodeAddress" placeholder="vpn.example.com"
+                                        required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Port</label>
+                                    <input type="number" class="input" id="nodePort" value="443" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">API Port</label>
+                                    <input type="number" class="input" id="nodeApiPort" value="10085">
+                                    <span class="form-helper">xray-core gRPC API port</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security Section -->
+                    <div class="modal-section">
+                        <div class="modal-section-header">
+                            <h4 class="modal-section-title">
+                                <span class="icon">🔒</span>
+                                Security Settings
+                            </h4>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="nodeTls" checked onchange="toggleTlsFields()">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label">TLS</span>
+                            </label>
+                        </div>
+                        <div class="modal-section-body" id="tlsFields">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">SNI (Server Name Indication)</label>
+                                <input type="text" class="input" id="nodeSni" placeholder="vpn.example.com">
+                                <span class="form-helper">The domain name sent during TLS handshake</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Reality Settings (VLESS Only) -->
+                    <div id="realitySection" class="modal-section reality hidden">
+                        <div class="modal-section-header">
+                            <h4 class="modal-section-title">
+                                <span class="icon">✨</span>
+                                VLESS Reality
+                            </h4>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="nodeReality" onchange="toggleRealityFields()">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label">Enable</span>
+                            </label>
+                        </div>
+                        <div class="modal-section-body hidden" id="realityFields">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">Target Destination <span
+                                            style="color: var(--error);">*</span></label>
+                                    <input type="text" class="input" id="realityDest"
+                                        placeholder="m.media-amazon.com:443">
+                                    <span class="form-helper">Destination for TLS fingerprint (domain:port)</span>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Server Names <span
+                                            style="color: var(--error);">*</span></label>
+                                    <input type="text" class="input" id="realityServerNames"
+                                        placeholder="m.media-amazon.com">
+                                    <span class="form-helper">Comma-separated SNI values</span>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label"
+                                    style="display: flex; align-items: center; gap: var(--space-sm);">
+                                    Public Key
+                                    <span id="keyStatusIndicator" class="badge badge-secondary"
+                                        style="font-size: 0.65rem;">Waiting for node</span>
+                                </label>
+                                <input type="text" class="input" id="realityPublicKey" readonly
+                                    style="font-family: var(--font-mono); background: var(--bg-tertiary); cursor: not-allowed;"
+                                    placeholder="Auto-generated by node agent">
+                                <span class="form-helper">🔒 Private key is securely stored on the node</span>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">Short IDs <span style="color: var(--error);">*</span></label>
+                                <input type="text" class="input" id="realityShortIds" placeholder="0123456789abcdef"
+                                    style="font-family: var(--font-mono);">
+                                <span class="form-helper">Comma-separated hex strings (8-16 chars each)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeNodeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveNode()">💾 Save Node</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        requireAuth();
+        requireAdmin();
+
+        const user = getCurrentUser();
+        // Populate header user info
+        document.getElementById('userEmail').textContent = user.email;
+        // Populate sidebar user info
+        document.getElementById('userEmailSidebar').textContent = user.email;
+        document.getElementById('userRoleSidebar').innerHTML = '<span class="badge badge-success" style="font-size: 0.65rem;">Admin</span>';
+
+        // Build navigation - all pages accessible
+        const navItems = [
+            { label: 'Dashboard', page: 'dashboard.html', icon: '📊' },
+            { label: 'Users', page: 'users.html', icon: '👥' },
+            { label: 'Plans', page: 'plans.html', icon: '📋' },
+            { label: 'Nodes', page: 'nodes.html', icon: '🌐' },
+            { label: 'Subscriptions', page: 'subscriptions.html', icon: '💎' },
+            { label: 'Settings', page: 'settings.html', icon: '⚙️' },
+        ];
+        const nav = document.getElementById('sidebarNav');
+        navItems.forEach(item => {
+            const navItem = document.createElement('div');
+            navItem.className = 'nav-item' + (window.location.pathname.includes(item.page) ? ' active' : '');
+            navItem.innerHTML = `${item.icon} ${item.label}`;
+            navItem.onclick = () => window.location.href = item.page;
+            nav.appendChild(navItem);
+        });
+
+        let allNodes = [];
+
+        async function loadNodes() {
+            const grid = document.getElementById('nodesGrid');
+            showLoading(grid);
+
+            try {
+                const response = await api.adminGetNodes();
+                if (response.success) {
+                    // Backend returns {nodes: [...]}
+                    allNodes = response.data.nodes || [];
+                    renderNodes(allNodes);
+                } else {
+                    grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">No nodes configured yet. Click "Add Node" to get started.</div>';
+                }
+            } catch (error) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--error);">Failed to load nodes</div>';
+            }
+        }
+
+        function renderNodes(nodes) {
+            const grid = document.getElementById('nodesGrid');
+            if (!nodes || nodes.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: var(--space-xl);">
+                        <div style="font-size: 3rem; margin-bottom: var(--space-md);">🌐</div>
+                        <h3 style="color: var(--text-secondary); margin-bottom: var(--space-sm);">No nodes configured</h3>
+                        <p style="color: var(--text-muted); margin-bottom: var(--space-lg);">Get started by adding your first VPN node</p>
+                        <button class="btn btn-primary" onclick="showAddNodeModal()">+ Add Node</button>
+                    </div>`;
+                return;
+            }
+
+            grid.innerHTML = nodes.map(node => {
+                const isReality = node.reality_enabled;
+                const protocolDisplay = node.protocol.toUpperCase() + (isReality ? ' + Reality' : ' + TLS');
+                const status = getNodeStatus(node.last_heartbeat);
+
+                return `
+                <div class="node-card">
+                    <div class="node-card-header">
+                        <div>
+                            <h3 class="node-card-title">
+                                <span class="status-dot ${status}"></span>
+                                ${node.name}
+                            </h3>
+                            <div class="node-card-address">${node.address}:${node.port}</div>
+                        </div>
+                        <span class="badge badge-${status === 'online' ? 'success' : status === 'offline' ? 'error' : 'warning'}">${status}</span>
+                    </div>
+                    <div class="node-card-body">
+                        <div class="node-stats-row">
+                            <div class="node-stat">
+                                <span class="node-stat-icon">🔐</span>
+                                <span class="node-stat-label">Protocol</span>
+                                <span class="node-stat-value">${protocolDisplay}</span>
+                            </div>
+                            <div class="node-stat">
+                                <span class="node-stat-icon">👥</span>
+                                <span class="node-stat-label">Users</span>
+                                <span class="node-stat-value">${node.current_users || 0}</span>
+                            </div>
+                            <div class="node-stat">
+                                <span class="node-stat-icon">📱</span>
+                                <span class="node-stat-label">Devices</span>
+                                <span class="node-stat-value">${node.online_devices || 0}</span>
+                            </div>
+                        </div>
+                        ${node.last_heartbeat ? `
+                        <div class="node-last-seen">
+                            <span>🕐</span>
+                            Last seen: ${formatRelativeTime(node.last_heartbeat)}
+                        </div>` : `
+                        <div class="node-last-seen">
+                            <span>⚠️</span>
+                            Never connected
+                        </div>`}
+                    </div>
+                    <div class="node-card-footer">
+                        <button class="btn btn-sm btn-secondary" onclick="editNode(${node.id})">✏️ Edit</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteNode(${node.id})">🗑️ Delete</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // Helper function to determine node status based on last heartbeat
+        function getNodeStatus(lastHeartbeat) {
+            if (!lastHeartbeat) return 'offline';
+
+            const now = new Date();
+            const lastSeen = new Date(lastHeartbeat);
+            const minutesSinceHeartbeat = (now - lastSeen) / 1000 / 60;
+
+            // If heartbeat within 2 minutes: online
+            // If heartbeat within 10 minutes: degraded
+            // Otherwise: offline
+            if (minutesSinceHeartbeat < 2) return 'online';
+            if (minutesSinceHeartbeat < 10) return 'degraded';
+            return 'offline';
+        }
+
+        // Helper function to get status indicator (colored dot)
+        function getStatusIndicator(status) {
+            const colors = {
+                online: '#10b981',    // green
+                degraded: '#f59e0b',  // orange
+                offline: '#ef4444'    // red
+            };
+            return `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${colors[status] || colors.offline};"></span>`;
+        }
+
+        // Helper function to format relative time
+        function formatRelativeTime(dateString) {
+            const now = new Date();
+            const date = new Date(dateString);
+            const seconds = Math.floor((now - date) / 1000);
+
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            const days = Math.floor(hours / 24);
+            return `${days}d ago`;
+        }
+
+        // Modal Logic
+        function showAddNodeModal() {
+            document.getElementById('modalTitle').textContent = 'Add Node';
+            document.getElementById('nodeForm').reset();
+            document.getElementById('nodeId').value = '';
+
+            // Hide Node ID display for new nodes
+            document.getElementById('nodeIdDisplay').style.display = 'none';
+
+            // Default to VLESS which shows Reality option
+            document.getElementById('nodeProtocol').value = 'vless';
+
+            // Reset key status indicator for new nodes
+            const keyIndicator = document.getElementById('keyStatusIndicator');
+            keyIndicator.textContent = 'Waiting for node';
+            keyIndicator.className = 'badge badge-secondary';
+            keyIndicator.style.fontSize = '0.65rem';
+
+            handleProtocolChange();
+            toggleTlsFields();
+            toggleRealityFields();
+
+            document.getElementById('nodeModal').classList.remove('hidden');
+        }
+
+        function closeNodeModal() {
+            document.getElementById('nodeModal').classList.add('hidden');
+        }
+
+        async function editNode(id) {
+            try {
+                const response = await api.adminGetNode(id);
+                if (response.success && response.data && response.data.node) {
+                    const node = response.data.node;
+
+                    document.getElementById('modalTitle').textContent = 'Edit Node';
+                    document.getElementById('nodeId').value = node.id;
+
+                    // Show and populate the readonly ID field
+                    document.getElementById('nodeIdDisplay').style.display = 'block';
+                    document.getElementById('nodeIdReadonly').value = `#${node.id}`;
+
+                    document.getElementById('nodeName').value = node.name;
+                    document.getElementById('nodeAddress').value = node.address;
+                    document.getElementById('nodePort').value = node.port;
+                    document.getElementById('nodeApiPort').value = node.api_port || 10085;
+                    document.getElementById('nodeProtocol').value = node.protocol;
+
+                    document.getElementById('nodeTls').checked = node.tls_enabled;
+                    document.getElementById('nodeSni').value = node.sni || '';
+
+                    // Reality fields
+                    document.getElementById('nodeReality').checked = node.reality_enabled;
+                    document.getElementById('realityDest').value = node.reality_dest || '';
+                    document.getElementById('realityServerNames').value = node.reality_server_names || '';
+                    document.getElementById('realityPublicKey').value = node.reality_public_key || '';
+                    document.getElementById('realityShortIds').value = node.reality_short_ids || '';
+
+                    // Update key status indicator
+                    const keyIndicator = document.getElementById('keyStatusIndicator');
+                    if (node.reality_public_key && node.reality_public_key.length > 0) {
+                        keyIndicator.textContent = '✓ Registered';
+                        keyIndicator.className = 'badge badge-success';
+                        keyIndicator.style.fontSize = '0.65rem';
+                    } else {
+                        keyIndicator.textContent = 'Waiting for node';
+                        keyIndicator.className = 'badge badge-secondary';
+                        keyIndicator.style.fontSize = '0.65rem';
+                    }
+
+                    // Update UI states
+                    handleProtocolChange();
+                    toggleTlsFields();
+                    toggleRealityFields();
+
+                    document.getElementById('nodeModal').classList.remove('hidden');
+                }
+            } catch (error) {
+                showToast('Failed to load node', 'error');
+            }
+        }
+
+        function handleProtocolChange() {
+            const type = document.getElementById('nodeProtocol').value;
+            const realitySection = document.getElementById('realitySection');
+
+            // Reality is only available for VLESS
+            if (type === 'vless') {
+                realitySection.classList.remove('hidden');
+            } else {
+                realitySection.classList.add('hidden');
+                document.getElementById('nodeReality').checked = false;
+                toggleRealityFields();
+            }
+        }
+
+        function toggleTlsFields() {
+            const enabled = document.getElementById('nodeTls').checked;
+            const fields = document.getElementById('tlsFields');
+            if (enabled) fields.classList.remove('hidden');
+            else fields.classList.add('hidden');
+        }
+
+        function toggleRealityFields() {
+            const enabled = document.getElementById('nodeReality').checked;
+            const fields = document.getElementById('realityFields');
+            const tlsCheckbox = document.getElementById('nodeTls');
+
+            if (enabled) {
+                fields.classList.remove('hidden');
+                // If Reality enabled, TLS must be enabled (conceptually) but handled via Reality
+                tlsCheckbox.checked = true;
+                tlsCheckbox.disabled = true;
+            } else {
+                fields.classList.add('hidden');
+                tlsCheckbox.disabled = false;
+            }
+        }
+
+        async function saveNode() {
+            const nodeId = document.getElementById('nodeId').value;
+            const realityEnabled = document.getElementById('nodeReality').checked;
+
+            // Validate Reality fields if enabled
+            if (realityEnabled) {
+                const realityDest = document.getElementById('realityDest').value.trim();
+                const realityServerNames = document.getElementById('realityServerNames').value.trim();
+                const realityShortIds = document.getElementById('realityShortIds').value.trim();
+
+                if (!realityDest) {
+                    showToast('Target Destination is required for Reality protocol', 'error');
+                    return;
+                }
+                if (!realityServerNames) {
+                    showToast('Server Names (SNI) is required for Reality protocol', 'error');
+                    return;
+                }
+                if (!realityShortIds) {
+                    showToast('Short IDs is required for Reality protocol', 'error');
+                    return;
+                }
+            }
+
+            const data = {
+                name: document.getElementById('nodeName').value,
+                address: document.getElementById('nodeAddress').value,
+                port: parseInt(document.getElementById('nodePort').value),
+                protocol: document.getElementById('nodeProtocol').value,
+                api_port: parseInt(document.getElementById('nodeApiPort').value),
+                tls_enabled: document.getElementById('nodeTls').checked,
+                sni: document.getElementById('nodeSni').value,
+
+                // Reality fields (private key is auto-generated on the node)
+                reality_enabled: realityEnabled,
+                reality_dest: realityEnabled ? document.getElementById('realityDest').value.trim() : '',
+                reality_server_names: realityEnabled ? document.getElementById('realityServerNames').value.trim() : '',
+                reality_short_ids: realityEnabled ? document.getElementById('realityShortIds').value.trim() : ''
+                // Note: reality_public_key is set by the node via heartbeat, not from this form
+            };
+
+            try {
+                let response;
+                if (nodeId) {
+                    response = await api.adminUpdateNode(nodeId, data);
+                } else {
+                    response = await api.adminCreateNode(data);
+                }
+
+                if (response.success) {
+                    showToast(nodeId ? 'Node updated' : 'Node created', 'success');
+                    closeNodeModal();
+                    loadNodes();
+                } else {
+                    showToast(response.message || 'Operation failed', 'error');
+                }
+            } catch (error) {
+                showToast('Operation failed', 'error');
+            }
+        }
+
+        async function deleteNode(id) {
+            confirm('Are you sure you want to delete this node?', async () => {
+                try {
+                    const response = await api.adminDeleteNode(id);
+                    if (response.success) {
+                        showToast('Node deleted', 'success');
+                        loadNodes();
+                    }
+                } catch (error) {
+                    showToast('Failed to delete node', 'error');
+                }
+            });
+        }
+
+        loadNodes();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,21 @@
+[Unit]
+Description=xpanel Node Agent
+Documentation=https://github.com/yourorg/xpanel
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/xpanel-agent
+ExecStart=/usr/local/bin/xpanel-agent -config /etc/xpanel-agent/config.yaml
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

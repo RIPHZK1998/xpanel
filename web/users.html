@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - xPanel</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        .subscription-info {
+            font-size: 0.9em;
+        }
+
+        .plan-name {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .data-usage {
+            margin-top: 4px;
+            font-size: 0.85em;
+            color: var(--text-muted);
+        }
+
+        .expiry-date {
+            margin-top: 2px;
+            font-size: 0.85em;
+        }
+
+        .expiry-warning {
+            color: var(--warning);
+        }
+
+        .expiry-error {
+            color: var(--error);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>xPanel</h2>
+            </div>
+            <nav class="sidebar-nav" id="sidebarNav">
+                <!-- Navigation items will be added by JavaScript -->
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">👤</div>
+                    <div class="user-details">
+                        <div class="user-name" id="userEmailSidebar">Admin</div>
+                        <div class="user-role" id="userRoleSidebar">Administrator</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-header">
+                <h1>User Management</h1>
+                <div style="display: flex; align-items: center; gap: var(--space-md);">
+                    <span id="userEmail" style="color: var(--text-secondary); font-size: 0.875rem;"></span>
+                    <button class="btn btn-secondary btn-sm" onclick="api.logout()">
+                        <span>🚪</span> Logout
+                    </button>
+                    <button class="btn btn-primary" onclick="showAddUserModal()">
+                        <span>➕</span> Add User
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="users-stats-bar" id="statsBar">
+                <div class="stat-item">
+                    <div class="stat-icon users">👥</div>
+                    <div class="stat-content">
+                        <span class="stat-number" id="totalUsers">-</span>
+                        <span class="stat-label">Total Users</span>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-icon online">🟢</div>
+                    <div class="stat-content">
+                        <span class="stat-number" id="onlineUsers">-</span>
+                        <span class="stat-label">Online Now</span>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-icon plans">📋</div>
+                    <div class="stat-content">
+                        <span class="stat-number" id="activeSubscriptions">-</span>
+                        <span class="stat-label">Active Plans</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Grid -->
+            <div class="users-grid" id="usersGrid">
+                <div class="empty-state">
+                    <div class="spinner"></div>
+                    <p style="color: var(--text-muted); margin-top: var(--space-md);">Loading users...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- User Modal -->
+    <div id="userModal" class="modal hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title" id="userModalTitle">Add User</h3>
+                <button class="modal-close" onclick="closeUserModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm">
+                    <input type="hidden" id="userId">
+
+                    <!-- Account Information Section -->
+                    <div class="modal-section">
+                        <div class="modal-section-header">
+                            <h4 class="modal-section-title">
+                                <span class="icon">👤</span>
+                                Account Information
+                            </h4>
+                        </div>
+                        <div class="modal-section-body">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">Email <span style="color: var(--error);">*</span></label>
+                                    <input type="email" class="input" id="userEmailInput" placeholder="user@example.com"
+                                        required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Password <span
+                                            style="color: var(--error);">*</span></label>
+                                    <input type="password" class="input" id="userPassword" placeholder="Enter password">
+                                    <span class="form-helper">Leave blank when editing to keep existing password</span>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Role</label>
+                                    <select class="select" id="userRoleSelect">
+                                        <option value="user">👤 User</option>
+                                        <option value="admin">🛡️ Admin</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subscription Section -->
+                    <div class="modal-section">
+                        <div class="modal-section-header">
+                            <h4 class="modal-section-title">
+                                <span class="icon">📋</span>
+                                Subscription Plan
+                            </h4>
+                        </div>
+                        <div class="modal-section-body">
+                            <div class="form-group">
+                                <label class="form-label">Select Plan</label>
+                                <select class="select" id="userPlanSelect" onchange="updatePlanDetails()">
+                                    <option value="">No plan assigned</option>
+                                </select>
+                            </div>
+                            <div id="planDetails" class="plan-details-box"
+                                style="display: none; margin-top: var(--space-md); padding: var(--space-md); background: var(--bg-secondary); border-radius: var(--radius-md);">
+                            </div>
+                            <div class="form-group" style="margin-top: var(--space-md); margin-bottom: 0;">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="userAutoRenew">
+                                    <span class="toggle-slider"></span>
+                                    <span class="toggle-label">Auto-renew subscription when expired</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveUser()">💾 Save User</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Links Modal -->
+    <div id="linksModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Connection Links</h3>
+                <button class="modal-close" onclick="closeLinksModal()">×</button>
+            </div>
+            <div class="modal-body" id="linksModalBody">
+                <p style="text-align: center; color: var(--text-muted);">Loading...</p>
+            </div>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <button class="btn btn-secondary" onclick="closeLinksModal()">Close</button>
+                <button class="btn btn-primary" id="copyAllBtn" onclick="copyAllLinks()" style="display: none;">📋 Copy
+                    All as Base64</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/qrcode.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        requireAuth();
+        requireAdmin();
+
+        const user = getCurrentUser();
+        // Populate header user info
+        document.getElementById('userEmail').textContent = user.email;
+        // Populate sidebar user info
+        document.getElementById('userEmailSidebar').textContent = user.email;
+        document.getElementById('userRoleSidebar').innerHTML = '<span class="badge badge-success" style="font-size: 0.65rem;">Admin</span>';
+
+        // Build navigation - all pages accessible
+        const navItems = [
+            { label: 'Dashboard', page: 'dashboard.html', icon: '📊' },
+            { label: 'Users', page: 'users.html', icon: '👥' },
+            { label: 'Plans', page: 'plans.html', icon: '📋' },
+            { label: 'Nodes', page: 'nodes.html', icon: '🌐' },
+            { label: 'Subscriptions', page: 'subscriptions.html', icon: '💎' },
+            { label: 'Settings', page: 'settings.html', icon: '⚙️' },
+        ];
+        const nav = document.getElementById('sidebarNav');
+        navItems.forEach(item => {
+            const navItem = document.createElement('div');
+            navItem.className = 'nav-item' + (window.location.pathname.includes(item.page) ? ' active' : '');
+            navItem.innerHTML = `${item.icon} ${item.label}`;
+            navItem.onclick = () => window.location.href = item.page;
+            nav.appendChild(navItem);
+        });
+
+        let allPlans = [];
+
+        async function loadData() {
+            // Load plans first for the dropdowns
+            try {
+                const plansResp = await api.getPlans();
+                if (plansResp.success) {
+                    allPlans = plansResp.data.plans || [];
+                    populatePlanSelect();
+                }
+            } catch (error) {
+                console.error('Failed to load plans:', error);
+            }
+
+            // Load users
+            loadUsers();
+        }
+
+        async function loadUsers() {
+            const grid = document.getElementById('usersGrid');
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column: 1/-1;">
+                    <div class="spinner"></div>
+                    <p style="color: var(--text-muted); margin-top: var(--space-md);">Loading users...</p>
+                </div>`;
+
+            try {
+                // Load users and activity data in parallel
+                const [usersResponse, activityResponse] = await Promise.all([
+                    api.adminGetUsers(),
+                    api.request('/api/v1/admin/activity/online', { method: 'GET' }).catch(() => ({ success: false }))
+                ]);
+
+                if (usersResponse.success) {
+                    // Build activity map by user_id
+                    const activityMap = {};
+                    let onlineCount = 0;
+                    if (activityResponse.success && activityResponse.data && activityResponse.data.users) {
+                        activityResponse.data.users.forEach(a => {
+                            activityMap[a.user_id] = a;
+                            if (a.is_online) onlineCount++;
+                        });
+                    }
+
+                    const users = usersResponse.data.users || [];
+
+                    // Update stats bar
+                    document.getElementById('totalUsers').textContent = users.length;
+                    document.getElementById('onlineUsers').textContent = onlineCount;
+                    document.getElementById('activeSubscriptions').textContent =
+                        users.filter(u => u.subscription && u.subscription.plan).length;
+
+                    renderUsers(users, activityMap);
+                } else {
+                    grid.innerHTML = `
+                        <div class="empty-state" style="grid-column: 1/-1;">
+                            <div class="empty-state-icon">❌</div>
+                            <h3 class="empty-state-title">Failed to load users</h3>
+                            <button class="btn btn-primary" onclick="loadUsers()">Try Again</button>
+                        </div>`;
+                }
+            } catch (error) {
+                grid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <div class="empty-state-icon">❌</div>
+                        <h3 class="empty-state-title">Failed to load users</h3>
+                        <button class="btn btn-primary" onclick="loadUsers()">Try Again</button>
+                    </div>`;
+            }
+        }
+
+        function renderUsers(users, activityMap = {}) {
+            const grid = document.getElementById('usersGrid');
+
+            if (users.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <div class="empty-state-icon">👥</div>
+                        <h3 class="empty-state-title">No users yet</h3>
+                        <p class="empty-state-text">Get started by adding your first user</p>
+                        <button class="btn btn-primary" onclick="showAddUserModal()">➕ Add User</button>
+                    </div>`;
+                return;
+            }
+
+            grid.innerHTML = users.map(user => {
+                const sub = user.subscription || {};
+                const plan = sub.plan || {};
+                const dataLimit = plan.data_limit_bytes || 0;
+                const dataUsed = sub.data_used_bytes || 0;
+                const percentUsed = dataLimit > 0 ? (dataUsed / dataLimit) * 100 : 0;
+                const activity = activityMap[user.id];
+
+                // Expiry calculation
+                let expiryClass = '';
+                let expiryText = 'No expiry';
+                if (sub.expires_at) {
+                    const daysLeft = sub.days_remaining;
+                    expiryText = `${daysLeft} days`;
+                    if (daysLeft < 3) expiryClass = 'error';
+                    else if (daysLeft < 7) expiryClass = 'warning';
+                }
+
+                // Progress bar class
+                let progressClass = '';
+                if (percentUsed > 90) progressClass = 'error';
+                else if (percentUsed > 75) progressClass = 'warning';
+
+                // Connection status
+                const isOnline = activity && activity.is_online;
+                const connectionText = !activity ? 'Never connected' :
+                    (isOnline ? `Online${activity.node_name ? ' • ' + activity.node_name : ''}` :
+                        `Last seen: ${formatTimeAgo(new Date(activity.last_seen))}`);
+
+                // Avatar initials
+                const initials = user.email.substring(0, 2).toUpperCase();
+
+                return `
+                <div class="user-card">
+                    <div class="user-card-header">
+                        <div class="user-card-avatar">${initials}</div>
+                        <div class="user-card-title">
+                            <h4 class="user-card-email">${user.email}</h4>
+                            <div class="user-card-uuid">${user.uuid}</div>
+                        </div>
+                        <div class="user-card-badges">
+                            <span class="badge ${user.role === 'admin' ? 'badge-info' : 'badge-secondary'}">${user.role}</span>
+                            ${getStatusBadge(user.status)}
+                        </div>
+                    </div>
+                    <div class="user-card-body">
+                        <div class="user-stats-grid">
+                            <div class="user-stat-box">
+                                <div class="user-stat-label">Plan</div>
+                                <div class="user-stat-value ${plan.display_name ? 'primary' : ''}">${plan.display_name || 'No Plan'}</div>
+                            </div>
+                            <div class="user-stat-box">
+                                <div class="user-stat-label">Expires</div>
+                                <div class="user-stat-value ${expiryClass}">${expiryText} ${sub.auto_renew ? '🔄' : ''}</div>
+                            </div>
+                        </div>
+                        
+                        ${plan.display_name ? `
+                        <div class="user-data-usage">
+                            <div class="data-usage-header">
+                                <span class="data-usage-label">Data Usage</span>
+                                <span class="data-usage-value">${formatBytes(dataUsed)} / ${dataLimit === 0 ? '∞' : formatBytes(dataLimit)}</span>
+                            </div>
+                            <div class="data-usage-bar">
+                                <div class="data-usage-fill ${progressClass}" style="width: ${Math.min(percentUsed, 100)}%;"></div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="user-connection">
+                            <span class="connection-dot ${isOnline ? 'online' : 'offline'}"></span>
+                            <span style="color: var(--text-muted);">${connectionText}</span>
+                            ${isOnline && activity.device_count > 0 ? `
+                                <span class="device-count-badge" title="${activity.device_ips ? activity.device_ips.join(', ') : ''}"">
+                                    📱 ${activity.device_count} device${activity.device_count > 1 ? 's' : ''}
+                                </span>
+                            ` : ''}
+                        </div>
+                    </div>
+                    <div class="user-card-footer">
+                        <button class="btn btn-sm btn-secondary" onclick="editUser(${user.id})">✏️ Edit</button>
+                        <button class="btn btn-sm btn-info" onclick="showUserLinks(${user.id})">📱 Links</button>
+                        ${user.status === 'active'
+                        ? `<button class="btn btn-sm btn-warning" onclick="suspendUser(${user.id})">⏸️ Suspend</button>`
+                        : `<button class="btn btn-sm btn-success" onclick="activateUser(${user.id})">▶️ Activate</button>`
+                    }
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function getStatusBadge(status) {
+            const badges = {
+                'active': '<span class="badge badge-success">Active</span>',
+                'suspended': '<span class="badge badge-warning">Suspended</span>',
+                'inactive': '<span class="badge badge-secondary">Inactive</span>'
+            };
+            return badges[status] || `<span class="badge">${status}</span>`;
+        }
+
+        function getConnectionBadge(activity) {
+            if (!activity) {
+                return '<span class="badge badge-secondary">⚫ Never</span>';
+            }
+
+            if (activity.is_online) {
+                const nodeName = activity.node_name ? `<br><small style="color: var(--text-muted);">${activity.node_name}</small>` : '';
+                return `<span class="badge badge-success">🟢 Online</span>${nodeName}`;
+            } else {
+                const lastSeen = formatTimeAgo(new Date(activity.last_seen));
+                return `<span class="badge badge-secondary">⚫ Offline</span><br><small style="color: var(--text-muted);">${lastSeen}</small>`;
+            }
+        }
+
+        function formatTimeAgo(date) {
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMinutes = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMinutes < 1) return 'Just now';
+            if (diffMinutes < 60) return `${diffMinutes} min ago`;
+            if (diffHours < 24) return `${diffHours} hr ago`;
+            if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+            return formatDate(date);
+        }
+
+        function populatePlanSelect(selectedPlanId = null) {
+            const select = document.getElementById('userPlanSelect');
+            select.innerHTML = '<option value="">Select a plan...</option>';
+
+            allPlans.forEach(plan => {
+                const option = document.createElement('option');
+                option.value = plan.id;
+                option.textContent = `${plan.display_name} ($${plan.price}/mo)`;
+                if (plan.id === selectedPlanId) option.selected = true;
+                select.appendChild(option);
+            });
+        }
+
+        function updatePlanDetails() {
+            const planId = parseInt(document.getElementById('userPlanSelect').value);
+            const details = document.getElementById('planDetails');
+
+            if (!planId) {
+                details.style.display = 'none';
+                details.innerHTML = '';
+                return;
+            }
+
+            const plan = allPlans.find(p => p.id === planId);
+            if (plan) {
+                details.style.display = 'block';
+                details.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-md); text-align: center;">
+                        <div>
+                            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Duration</div>
+                            <div style="font-weight: 600; color: var(--text-primary);">${plan.duration}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Data Limit</div>
+                            <div style="font-weight: 600; color: var(--text-primary);">${plan.data_limit_gb === 0 ? 'Unlimited' : plan.data_limit_gb + ' GB'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Max Devices</div>
+                            <div style="font-weight: 600; color: var(--text-primary);">${plan.max_devices}</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function showAddUserModal() {
+            document.getElementById('userModalTitle').textContent = 'Add User';
+            document.getElementById('userForm').reset();
+            document.getElementById('userId').value = '';
+            document.getElementById('userEmailInput').disabled = false;
+            document.getElementById('planDetails').style.display = 'none';
+            document.getElementById('planDetails').innerHTML = '';
+            populatePlanSelect();
+            document.getElementById('userModal').classList.remove('hidden');
+        }
+
+        async function editUser(id) {
+            try {
+                const response = await api.adminGetUser(id);
+                if (response.success) {
+                    const user = response.data.user;
+                    document.getElementById('userModalTitle').textContent = 'Edit User';
+                    document.getElementById('userId').value = user.id;
+                    document.getElementById('userEmailInput').value = user.email;
+                    document.getElementById('userEmailInput').disabled = true;
+                    document.getElementById('userRoleSelect').value = user.role;
+                    document.getElementById('userPassword').value = '';
+
+                    const sub = user.subscription || {};
+                    populatePlanSelect(sub.plan ? sub.plan.id : null);
+                    document.getElementById('userAutoRenew').checked = sub.auto_renew || false;
+                    updatePlanDetails();
+
+                    document.getElementById('userModal').classList.remove('hidden');
+                }
+            } catch (error) {
+                showToast('Failed to load user details', 'error');
+            }
+        }
+
+        async function saveUser() {
+            const userId = document.getElementById('userId').value;
+            const email = document.getElementById('userEmailInput').value;
+            const password = document.getElementById('userPassword').value;
+            const role = document.getElementById('userRoleSelect').value;
+            const planId = parseInt(document.getElementById('userPlanSelect').value);
+            const autoRenew = document.getElementById('userAutoRenew').checked;
+
+            try {
+                // 1. Save User Details
+                if (userId) {
+                    // Update existing user
+                    const userData = { role };
+                    if (password) userData.password = password;
+
+                    await api.request(`/api/v1/admin/users/${userId}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(userData)
+                    });
+                } else {
+                    // Create new user
+                    if (!password) {
+                        showToast('Password is required for new users', 'error');
+                        return;
+                    }
+                    const resp = await api.createUser({ email, password, role });
+                    if (!resp.success) throw new Error(resp.message);
+
+                    // Use the ID from the new user for plan assignment
+                    // Wait, the API might not return the ID immediately available for plan assignment?
+                    // Actually createUser returns the user object nicely
+                    // But we need to handle the plan assignment separately regardless
+                    // Let's assume the create call returns the user
+                    // For now, simpler flow:
+                }
+
+                const targetUserId = userId || (await getUserByEmail(email)).id;
+
+                // 2. Assign Plan (if selected)
+                if (planId) {
+                    await api.assignPlanToUser(targetUserId, planId, autoRenew);
+                }
+
+                showToast(userId ? 'User updated successfully' : 'User created successfully', 'success');
+                closeUserModal();
+                loadUsers();
+
+            } catch (error) {
+                showToast('Operation failed: ' + error.message, 'error');
+            }
+        }
+
+        // Helper to get user ID after creation (since creating doesn't return ID directly in all cases maybe)
+        // Actually our createUser API returns {data: {user: {...}}} so we can use that if we refactor verify
+        // For now, let's keep it simple.
+
+        function suspendUser(id) {
+            confirm('Are you sure you want to suspend this user?', async () => {
+                try {
+                    await api.adminSuspendUser(id);
+                    showToast('User suspended successfully', 'success');
+                    loadUsers();
+                } catch (error) {
+                    showToast('Failed to suspend user', 'error');
+                }
+            });
+        }
+
+        async function activateUser(id) {
+            try {
+                await api.adminActivateUser(id);
+                showToast('User activated successfully', 'success');
+                loadUsers();
+            } catch (error) {
+                showToast('Failed to activate user', 'error');
+            }
+        }
+
+        let currentLinksData = null;
+
+        async function showUserLinks(userId) {
+            const modalBody = document.getElementById('linksModalBody');
+            const copyAllBtn = document.getElementById('copyAllBtn');
+
+            modalBody.innerHTML = '<p style="text-align: center; color: var(--text-muted);">Loading...</p>';
+            copyAllBtn.style.display = 'none';
+            document.getElementById('linksModal').classList.remove('hidden');
+
+            try {
+                const response = await api.getUserLinks(userId);
+                if (!response.success || !response.data) {
+                    modalBody.innerHTML = '<p style="text-align: center; color: var(--error);">Failed to load connection links</p>';
+                    return;
+                }
+
+                currentLinksData = response.data;
+                const links = response.data.links || [];
+
+                if (links.length === 0) {
+                    modalBody.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No nodes available. User may not have an active subscription plan.</p>';
+                    return;
+                }
+
+                // Show copy all button
+                copyAllBtn.style.display = 'inline-block';
+
+                // Build the links display
+                let html = '<div style="display: flex; flex-direction: column; gap: 20px;">';
+
+                links.forEach((nodeLink, index) => {
+                    const qrId = `qr-${index}`;
+                    html += `
+                        <div class="card" style="padding: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; gap: 16px;">
+                                <div style="flex: 1;">
+                                    <h4 style="margin: 0 0 8px 0; color: var(--primary);">${nodeLink.node_name}</h4>
+                                    <p style="margin: 0 0 12px 0; font-size: 0.9em; color: var(--text-muted);">
+                                        ${nodeLink.protocol.toUpperCase()} • ${nodeLink.address}:${nodeLink.port}
+                                    </p>
+                                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                        <input type="text" class="input" id="link-${index}" value="${nodeLink.link}" readonly style="font-size: 0.85em; font-family: monospace;">
+                                        <button class="btn btn-secondary btn-sm" onclick="copyLinkByIndex(${index})">📋 Copy</button>
+                                    </div>
+                                </div>
+                                <div id="${qrId}" style="min-width: 128px; min-height: 128px; background: white; padding: 8px; border-radius: 8px;"></div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+                modalBody.innerHTML = html;
+
+                // Generate QR codes after DOM is updated
+                links.forEach((nodeLink, index) => {
+                    const qrId = `qr-${index}`;
+                    new QRCode(document.getElementById(qrId), {
+                        text: nodeLink.qr_data,
+                        width: 128,
+                        height: 128,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                });
+
+            } catch (error) {
+                console.error('Failed to load links:', error);
+                modalBody.innerHTML = '<p style="text-align: center; color: var(--error);">Failed to load connection links</p>';
+            }
+        }
+
+        function copyLinkByIndex(index) {
+            const linkInput = document.getElementById(`link-${index}`);
+            linkInput.select();
+            document.execCommand('copy');
+            showToast('Link copied to clipboard', 'success');
+        }
+
+        function copyAllLinks() {
+            if (!currentLinksData || !currentLinksData.links || currentLinksData.links.length === 0) {
+                showToast('No links to copy', 'error');
+                return;
+            }
+
+            // Encode all links as base64 subscription format
+            const allLinks = currentLinksData.links.map(l => l.link).join('\n');
+            const base64 = btoa(allLinks);
+
+            // Copy to clipboard
+            const tempInput = document.createElement('textarea');
+            tempInput.value = base64;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+
+            showToast('All links copied as Base64 subscription', 'success');
+        }
+
+        function closeLinksModal() {
+            document.getElementById('linksModal').classList.add('hidden');
+        }
+
+        function copyLink(elementId) {
+            const copyText = document.getElementById(elementId);
+            copyText.select();
+            document.execCommand("copy");
+            showToast('Link copied to clipboard', 'success');
+        }
+
+        function closeUserModal() {
+            document.getElementById('userModal').classList.add('hidden');
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            // Trigger animation
+            setTimeout(() => toast.style.opacity = '1', 10);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        async function getUserByEmail(email) {
+            // Helper since createUser return structure might vary in my memory
+            const response = await api.adminGetUsers();
+            return response.data.users.find(u => u.email === email);
+        }
+
+        loadData();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,66 @@
+# ============================================
+# Node Identification
+# ============================================
+node:
+  id: 1                    # Node ID from management panel (required)
+  name: "US-West-1"        # Descriptive name (optional, for logging)
+
+# ============================================
+# Management Panel Connection
+# ============================================
+panel:
+  url: "http://127.0.0.1:8080"
+  api_key: "CkzdaG4xPVZ6KDSck]8GsP^XQaaF"
+  timeout: 10s
+
+# ============================================
+# Local File Paths
+# These files must exist on the node server
+# ============================================
+files:
+  # TLS Certificate (required if TLS enabled in panel)
+  tls_cert: "/etc/ssl/certs/server.crt"
+  tls_key: "/etc/ssl/private/server.key"
+  
+  # GeoIP Database (optional, for routing rules)
+  geoip: "/usr/local/share/xray/geoip.dat"
+  geosite: "/usr/local/share/xray/geosite.dat"
+  
+  # xray config output (optional, for debugging)
+  xray_config: "/etc/xpanel-agent/xray-config.json"
+
+# ============================================
+# xray-core API Settings (Local)
+# ============================================
+xray:
+  api_address: "127.0.0.1"
+  api_port: 10085
+
+# ============================================
+# Sync Intervals
+# ============================================
+intervals:
+  heartbeat: 30s        # How often to send heartbeat
+  user_sync: 5m         # How often to sync users from panel
+  traffic_report: 1m    # How often to report traffic stats
+
+# ============================================
+# Logging
+# ============================================
+logging:
+  level: "info"         # debug, info, warn, error
+  format: "json"        # json or text
+
+# ============================================
+# PANEL-MANAGED SETTINGS (fetched on startup)
+# ============================================
+# The following are fetched from the panel and override any local values:
+# - protocol (vless/vmess/trojan)
+# - listen_port (VPN port)
+# - tls_enabled (true/false)
+# - sni (Server Name Indication)
+# - inbound_tag (xray inbound tag)
+#
+# To configure these, use the management panel:
+# POST /api/v1/admin/nodes
+# PUT /api/v1/admin/nodes/:id

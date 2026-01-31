@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - xPanel</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        .tabs {
+            display: flex;
+            gap: var(--space-md);
+            border-bottom: 1px solid var(--border);
+            margin-bottom: var(--space-lg);
+        }
+
+        .tab {
+            padding: var(--space-md);
+            cursor: pointer;
+            color: var(--text-secondary);
+            border-bottom: 2px solid transparent;
+            transition: all var(--transition-fast);
+        }
+
+        .tab:hover {
+            color: var(--primary);
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-md);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-sm);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>xPanel</h2>
+            </div>
+            <nav class="sidebar-nav" id="sidebarNav"></nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">👤</div>
+                    <div class="user-details">
+                        <div class="user-name" id="userEmailSidebar">Admin</div>
+                        <div class="user-role" id="userRoleSidebar">Administrator</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-header">
+                <h1>Settings</h1>
+                <div style="display: flex; align-items: center; gap: var(--space-md);">
+                    <span id="userEmail" style="color: var(--text-secondary); font-size: 0.875rem;"></span>
+                    <button class="btn btn-secondary btn-sm" onclick="api.logout()">
+                        <span>🚪</span> Logout
+                    </button>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('system')">System Configuration</div>
+                <div class="tab" onclick="switchTab('about')">About</div>
+            </div>
+
+            <!-- System Tab -->
+            <div id="system" class="tab-content active">
+                <div class="card" style="max-width: 800px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-lg);">
+                        <h3 class="card-title">System Configuration</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="reloadConfig()">🔄 Reload Cache</button>
+                    </div>
+
+                    <div class="badge badge-success mb-lg"
+                        style="display: flex; gap: var(--space-sm); align-items: center; padding: var(--space-md);">
+                        <span style="font-size: 1.25rem;">✅</span>
+                        <div>
+                            <strong>Hot-Reload Enabled</strong><br>
+                            Configuration changes take effect immediately without server restart.
+                        </div>
+                    </div>
+
+                    <div id="configList"></div>
+                </div>
+            </div>
+
+            <!-- About Tab -->
+            <div id="about" class="tab-content">
+                <div class="card" style="max-width: 600px;">
+                    <h3 class="card-title">About xPanel</h3>
+                    <div style="display: flex; flex-direction: column; gap: var(--space-md);">
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 0.875rem;">Version</div>
+                            <div style="font-weight: 600;">v1.0.0 (Production Ready)</div>
+                        </div>
+                        <div>
+                            <div style="color: var(--text-secondary); font-size: 0.875rem;">Backend Status</div>
+                            <div><span class="badge badge-success">Operational</span></div>
+                        </div>
+                        <div style="border-top: 1px solid var(--border); padding-top: var(--space-md);">
+                            <p>VPN Management Panel with VLESS-Reality support and hot-reload configuration.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    </div>
+    </main>
+    </div>
+
+    <!-- Edit Config Modal -->
+    <div id="editModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit Configuration</h3>
+                <button class="modal-close" onclick="closeEditModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="editForm">
+                    <input type="hidden" id="editKey">
+                    <div class="form-group">
+                        <label class="form-label" id="editLabel"></label>
+                        <input type="text" class="input" id="editValue" required>
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: var(--space-xs);"
+                            id="editDescription"></p>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveConfig()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        requireAuth();
+        requireAdmin();
+
+        const user = getCurrentUser();
+
+        // Populate sidebar user info
+        document.getElementById('userEmailSidebar').textContent = user.email;
+        document.getElementById('userRoleSidebar').innerHTML = '<span class="badge badge-success" style="font-size: 0.65rem;">Admin</span>';
+
+        // Populate header user email
+        document.getElementById('userEmail').textContent = user.email;
+
+        // Navigation
+        const navItems = [
+            { label: 'Dashboard', page: 'dashboard.html', icon: '📊' },
+            { label: 'Users', page: 'users.html', icon: '👥' },
+            { label: 'Plans', page: 'plans.html', icon: '📋' },
+            { label: 'Nodes', page: 'nodes.html', icon: '🌐' },
+            { label: 'Subscriptions', page: 'subscriptions.html', icon: '💎' },
+            { label: 'Settings', page: 'settings.html', icon: '⚙️' },
+        ];
+        const nav = document.getElementById('sidebarNav');
+        navItems.forEach(item => {
+            const navItem = document.createElement('div');
+            navItem.className = 'nav-item' + (window.location.pathname.includes(item.page) ? ' active' : '');
+            navItem.innerHTML = `${item.icon} ${item.label}`;
+            navItem.onclick = () => window.location.href = item.page;
+            nav.appendChild(navItem);
+        });
+
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            const tabs = document.querySelectorAll('.tab');
+            const tabIndex = ['system', 'about'].indexOf(tabId);
+            tabs[tabIndex].classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+
+            if (tabId === 'system') {
+                loadSystemConfig();
+            }
+        }
+
+        // Load System Config
+        async function loadSystemConfig() {
+            try {
+                const response = await api.getSystemConfig();
+                if (response.success) {
+                    renderConfigs(response.data.configs || []);
+                }
+            } catch (error) {
+                showToast('Failed to load configuration', 'error');
+            }
+        }
+
+        function renderConfigs(configs) {
+            const list = document.getElementById('configList');
+            if (!configs || configs.length === 0) {
+                list.innerHTML = '<p style="color: var(--text-muted);">No configuration found</p>';
+                return;
+            }
+
+            list.innerHTML = configs.map(cfg => {
+                // Sensitive keys should always show Reveal button
+                const sensitiveKeys = ['node_api_key', 'jwt_secret'];
+                const isSensitive = cfg.encrypted || sensitiveKeys.includes(cfg.key);
+                const isMasked = cfg.value.includes('••');
+
+                return `
+        <div class="config-item">
+          <div style="flex: 1;">
+            <div style="font-weight: 600; margin-bottom: var(--space-xs);">${cfg.key}</div>
+            <div id="value-${cfg.key}" style="font-size: 0.875rem; color: var(--text-secondary); font-family: var(--font-mono);">${cfg.value}</div>
+            ${cfg.description ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: var(--space-xs);">${cfg.description}</div>` : ''}
+            ${cfg.updated_at ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: var(--space-xs);">Last updated: ${formatDate(cfg.updated_at)}</div>` : ''}
+          </div>
+          <div style="display: flex; gap: var(--space-sm);">
+            ${isMasked ? `<button class="btn btn-sm btn-secondary" onclick='revealConfig("${cfg.key}")'>👁 Reveal</button>` : `<button class="btn btn-sm btn-secondary" onclick='copyValue("${cfg.key}", "${cfg.value}")'>📋 Copy</button>`}
+            <button class="btn btn-sm btn-primary" onclick='editConfig(${JSON.stringify(cfg)})'>Edit</button>
+          </div>
+        </div>
+      `;
+            }).join('');
+        }
+
+        async function revealConfig(key) {
+            try {
+                const response = await api.revealConfigValue(key);
+                if (response.success) {
+                    const valueEl = document.getElementById(`value-${key}`);
+                    const value = response.data.value;
+                    valueEl.innerHTML = `${value} <button class="btn btn-sm btn-secondary" style="margin-left: var(--space-sm);" onclick='copyValue("${key}", "${value}")'>📋 Copy</button>`;
+                    showToast('Value revealed', 'success');
+                }
+            } catch (error) {
+                showToast('Failed to reveal value', 'error');
+            }
+        }
+
+        function copyValue(key, value) {
+            navigator.clipboard.writeText(value).then(() => {
+                showToast(`${key} copied to clipboard`, 'success');
+            }).catch(() => {
+                showToast('Failed to copy', 'error');
+            });
+        }
+
+        function editConfig(cfg) {
+            document.getElementById('editKey').value = cfg.key;
+            document.getElementById('editLabel').textContent = cfg.key.replace(/_/g, ' ').toUpperCase();
+            document.getElementById('editValue').value = cfg.encrypted ? '' : cfg.value;
+            document.getElementById('editValue').placeholder = cfg.encrypted ? 'Enter new value...' : '';
+            document.getElementById('editDescription').textContent = cfg.description || '';
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+        }
+
+        async function saveConfig() {
+            const key = document.getElementById('editKey').value;
+            const value = document.getElementById('editValue').value;
+
+            if (!value) {
+                showToast('Value cannot be empty', 'error');
+                return;
+            }
+
+            try {
+                const response = await api.updateSystemConfig(key, value);
+                if (response.success) {
+                    showToast('Configuration updated successfully', 'success');
+                    closeEditModal();
+                    loadSystemConfig();
+                } else {
+                    showToast(response.message || 'Failed to update', 'error');
+                }
+            } catch (error) {
+                showToast('Operation failed', 'error');
+            }
+        }
+
+        async function reloadConfig() {
+            try {
+                const response = await api.reloadSystemConfig();
+                if (response.success) {
+                    showToast('Configuration cache reloaded', 'success');
+                }
+            } catch (error) {
+                showToast('Failed to reload cache', 'error');
+            }
+        }
+
+        // Load on init
+        loadSystemConfig();
+    </script>
+</body>
+
+</html>

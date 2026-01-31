@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - xPanel</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        /* Tab Navigation */
+        .dashboard-tabs {
+            display: flex;
+            gap: var(--space-sm);
+            border-bottom: 2px solid var(--border);
+            margin-bottom: var(--space-xl);
+            padding: 0 var(--space-md);
+        }
+
+        .dashboard-tab {
+            padding: var(--space-md) var(--space-lg);
+            cursor: pointer;
+            color: var(--text-secondary);
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all var(--transition-fast);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .dashboard-tab:hover {
+            color: var(--primary);
+            background: var(--bg-hover);
+        }
+
+        .dashboard-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-lg);
+            margin-bottom: var(--space-xl);
+        }
+
+        .stat-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            transition: all var(--transition-fast);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: var(--space-sm);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: var(--space-xs);
+        }
+
+        .stat-meta {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        /* Config Item */
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-md);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-sm);
+            transition: all var(--transition-fast);
+        }
+
+        .config-item:hover {
+            border-color: var(--primary);
+            background: var(--bg-hover);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>xPanel</h2>
+            </div>
+            <nav class="sidebar-nav" id="sidebarNav"></nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">👤</div>
+                    <div class="user-details">
+                        <div class="user-name" id="userEmailSidebar">Admin</div>
+                        <div class="user-role" id="userRoleSidebar"></div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-header">
+                <h1>Dashboard</h1>
+                <div style="display: flex; align-items: center; gap: var(--space-md);">
+                    <span id="userEmail" style="color: var(--text-secondary); font-size: 0.875rem;"></span>
+                    <button class="btn btn-secondary btn-sm" onclick="api.logout()">
+                        <span>🚪</span> Logout
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dashboard displays Overview only - Plans and Settings are standalone pages -->
+            <div id="overview" class="tab-panel active">
+                <div id="overviewContent"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plans - xPanel</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        .toolbar {
+            display: flex;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .price-tag {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .duration-badge {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            padding: 2px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>xPanel</h2>
+            </div>
+            <nav class="sidebar-nav" id="sidebarNav"></nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">👤</div>
+                    <div class="user-details">
+                        <div class="user-name" id="userEmailSidebar">Admin</div>
+                        <div class="user-role" id="userRoleSidebar">Administrator</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-header">
+                <h1>Plan Management</h1>
+                <div style="display: flex; align-items: center; gap: var(--space-md);">
+                    <span id="userEmail" style="color: var(--text-secondary); font-size: 0.875rem;"></span>
+                    <button class="btn btn-secondary btn-sm" onclick="api.logout()">
+                        <span>🚪</span> Logout
+                    </button>
+                </div>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-box">
+                    <input type="text" class="input" id="searchInput" placeholder="Search plans...">
+                </div>
+                <button class="btn btn-secondary" onclick="loadPlans()">🔄 Refresh</button>
+                <button class="btn btn-primary" onclick="showCreateModal()">+ New Plan</button>
+            </div>
+
+            <div class="card">
+                <table class="table" id="plansTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Price</th>
+                            <th>Duration</th>
+                            <th>Data Limit</th>
+                            <th>Devices</th>
+                            <th>Nodes</th>
+                            <th>Users</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="plansTableBody"></tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create/Edit Plan Modal -->
+    <div id="planModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">Create Plan</h3>
+                <button class="modal-close" onclick="closePlanModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="planForm">
+                    <input type="hidden" id="planId">
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Internal Name (ID)</label>
+                            <input type="text" class="input" id="planName" placeholder="e.g. basic_monthly" required>
+                            <p class="text-sm text-muted mt-xs">Unique identifier for the plan</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Display Name</label>
+                            <input type="text" class="input" id="planDisplayName" placeholder="e.g. Basic Monthly"
+                                required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Price</label>
+                            <input type="number" class="input" id="planPrice" step="0.01" min="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Duration</label>
+                            <select class="select" id="planDuration" required>
+                                <option value="weekly">Weekly (7 days)</option>
+                                <option value="monthly" selected>Monthly (30 days)</option>
+                                <option value="quarterly">Quarterly (90 days)</option>
+                                <option value="annual">Annual (365 days)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Data Limit (GB)</label>
+                            <input type="number" class="input" id="planDataLimit" min="0" value="100">
+                            <p class="text-sm text-muted mt-xs">0 for unlimited</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Max Devices</label>
+                            <input type="number" class="input" id="planMaxDevices" min="1" value="5">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Features (Comma separated)</label>
+                        <textarea class="input" id="planFeatures" rows="2"
+                            placeholder="Fast Speed, No Logs, ..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea class="input" id="planDescription" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closePlanModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="savePlan()">Save Plan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Node Assignment Modal -->
+    <div id="nodeModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Assign Nodes to Plan</h3>
+                <button class="modal-close" onclick="closeNodeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="nodePlanId">
+                <p class="mb-md">Select which nodes users on this plan can access:</p>
+                <div id="nodesList" style="max-height: 400px; overflow-y: auto;">
+                    <p style="text-align: center; color: var(--text-muted);">Loading nodes...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeNodeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveNodeAssignment()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        requireAuth();
+        requireAdmin();
+
+        const user = getCurrentUser();
+
+        // Populate sidebar user info
+        document.getElementById('userEmailSidebar').textContent = user.email;
+        document.getElementById('userRoleSidebar').innerHTML = '<span class="badge badge-success" style="font-size: 0.65rem;">Admin</span>';
+
+        // Populate header user email
+        document.getElementById('userEmail').textContent = user.email;
+
+        // Build navigation
+        const navItems = [
+            { label: 'Dashboard', page: 'dashboard.html', icon: '📊' },
+            { label: 'Users', page: 'users.html', icon: '👥' },
+            { label: 'Nodes', page: 'nodes.html', icon: '🌐' },
+            { label: 'Plans', page: 'plans.html', icon: '📋' },
+            { label: 'Subscriptions', page: 'subscriptions.html', icon: '💎' },
+            { label: 'Settings', page: 'settings.html', icon: '⚙️' },
+        ];
+
+        const nav = document.getElementById('sidebarNav');
+        navItems.forEach(item => {
+            const navItem = document.createElement('div');
+            navItem.className = 'nav-item' + (window.location.pathname.includes(item.page) ? ' active' : '');
+            navItem.innerHTML = `${item.icon} ${item.label}`;
+            navItem.onclick = () => window.location.href = item.page;
+            nav.appendChild(navItem);
+        });
+
+        // Plan Management
+        let allPlans = [];
+        let allNodes = [];
+
+        async function loadPlans() {
+            const tbody = document.getElementById('plansTableBody');
+            showLoading(tbody);
+
+            try {
+                const response = await api.getPlans();
+                if (response.success) {
+                    allPlans = response.data.plans || [];
+                    renderPlans(allPlans);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No plans found</td></tr>';
+                }
+            } catch (error) {
+                console.error('Failed to load plans:', error);
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center text-error">Failed to load plans</td></tr>';
+            }
+        }
+
+        function renderPlans(plans) {
+            const tbody = document.getElementById('plansTableBody');
+            if (!plans || plans.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No plans found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = plans.map(plan => {
+                const hasUsersNoNodes = (plan.user_count || 0) > 0 && (plan.node_count || 0) === 0;
+                const nodesWarning = hasUsersNoNodes ?
+                    '<span title="Users on this plan cannot connect - no nodes assigned!" style="cursor: help; color: var(--warning);">⚠️</span>' : '';
+
+                return `<tr>
+                    <td>${plan.id}</td>
+                    <td>
+                        <div style="font-weight: 500">${escapeHtml(plan.display_name)}</div>
+                        <div class="text-muted text-sm">${escapeHtml(plan.name)}</div>
+                    </td>
+                    <td class="price-tag">$${plan.price.toFixed(2)}</td>
+                    <td><span class="duration-badge">${plan.duration}</span></td>
+                    <td>${plan.data_limit_gb === 0 ? 'Unlimited' : plan.data_limit_gb + ' GB'}</td>
+                    <td>${plan.max_devices}</td>
+                    <td>
+                         <span class="badge ${plan.node_count > 0 ? 'badge-success' : 'badge-secondary'}">${plan.node_count || 0} nodes</span>
+                         ${nodesWarning}
+                    </td>
+                    <td><span class="badge ${plan.user_count > 0 ? 'badge-info' : 'badge-secondary'}">${plan.user_count || 0} users</span></td>
+                    <td>${getStatusBadge(plan.status)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" onclick="editPlan(${plan.id})">Edit</button>
+                        <button class="btn btn-sm btn-info" onclick="showNodeAssignment(${plan.id})">Nodes</button>
+                        <button class="btn btn-sm btn-danger" onclick="deletePlan(${plan.id})">Delete</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function showCreateModal() {
+            document.getElementById('modalTitle').textContent = 'Create Plan';
+            document.getElementById('planId').value = '';
+            document.getElementById('planForm').reset();
+            document.getElementById('planDuration').value = 'monthly';
+            document.getElementById('planDataLimit').value = '100';
+            document.getElementById('planMaxDevices').value = '5';
+            document.getElementById('planModal').classList.remove('hidden');
+        }
+
+        async function editPlan(id) {
+            const plan = allPlans.find(p => p.id === id);
+            if (!plan) return;
+
+            document.getElementById('modalTitle').textContent = 'Edit Plan';
+            document.getElementById('planId').value = plan.id;
+            document.getElementById('planName').value = plan.name;
+            document.getElementById('planName').disabled = true;
+            document.getElementById('planDisplayName').value = plan.display_name;
+            document.getElementById('planPrice').value = plan.price;
+            document.getElementById('planDuration').value = plan.duration;
+            document.getElementById('planDataLimit').value = plan.data_limit_gb;
+            document.getElementById('planMaxDevices').value = plan.max_devices;
+            document.getElementById('planFeatures').value = (plan.features || []).join(', ');
+            document.getElementById('planDescription').value = plan.description || '';
+
+            // Format existing features back to comma-separated string if needed
+            // The API returns an array, but we populate from the array.
+
+            document.getElementById('planModal').classList.remove('hidden');
+        }
+
+        function closePlanModal() {
+            document.getElementById('planModal').classList.add('hidden');
+            document.getElementById('planName').disabled = false;
+        }
+
+        async function savePlan() {
+            const id = document.getElementById('planId').value;
+            const data = {
+                name: document.getElementById('planName').value,
+                display_name: document.getElementById('planDisplayName').value,
+                price: parseFloat(document.getElementById('planPrice').value),
+                duration: document.getElementById('planDuration').value,
+                data_limit_gb: parseInt(document.getElementById('planDataLimit').value),
+                max_devices: parseInt(document.getElementById('planMaxDevices').value),
+                features: document.getElementById('planFeatures').value.split(',').map(f => f.trim()).filter(f => f),
+                description: document.getElementById('planDescription').value
+            };
+
+            if (!data.name || !data.display_name) {
+                showToast('Name and Display Name are required', 'error');
+                return;
+            }
+
+            try {
+                let response;
+                if (id) {
+                    response = await api.updatePlan(id, data);
+                } else {
+                    response = await api.createPlan(data);
+                }
+
+                if (response.success) {
+                    showToast(`Plan ${id ? 'updated' : 'created'} successfully`, 'success');
+                    closePlanModal();
+                    loadPlans();
+                } else {
+                    showToast(response.message || 'Operation failed', 'error');
+                }
+            } catch (error) {
+                console.error('Save failed:', error);
+                showToast('Failed to save plan', 'error');
+            }
+        }
+
+        async function deletePlan(id) {
+            if (!confirm('Are you sure you want to delete this plan? This activity cannot be undone.')) return;
+
+            try {
+                const response = await api.deletePlan(id);
+                if (response.success) {
+                    showToast('Plan deleted successfully', 'success');
+                    loadPlans();
+                } else {
+                    showToast(response.message || 'Failed to delete plan', 'error');
+                }
+            } catch (error) {
+                console.error('Delete failed:', error);
+                showToast('Failed to delete plan', 'error');
+            }
+        }
+
+        // Node Assignment
+        function closeNodeModal() {
+            document.getElementById('nodeModal').classList.add('hidden');
+        }
+
+        async function showNodeAssignment(planId) {
+            document.getElementById('nodePlanId').value = planId;
+            // Load nodes and then show modal...
+            try {
+                const nodesResponse = await api.getNodes();
+                if (nodesResponse.success) {
+                    allNodes = nodesResponse.data.nodes || [];
+                }
+
+                const planNodesResponse = await api.getPlanNodes(planId);
+                const assignedNodeIds = planNodesResponse.success ?
+                    (planNodesResponse.data.nodes || []).map(n => n.id) : [];
+
+                const nodesList = document.getElementById('nodesList');
+                if (allNodes.length === 0) {
+                    nodesList.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No nodes available</p>';
+                } else {
+                    nodesList.innerHTML = allNodes.map(node => `
+                        <div class="form-group" style="margin-bottom: var(--space-sm);">
+                            <label style="display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" 
+                                       class="node-checkbox" 
+                                       value="${node.id}" 
+                                       ${assignedNodeIds.includes(node.id) ? 'checked' : ''}
+                                       style="margin-right: var(--space-sm);">
+                                <div>
+                                    <strong>${escapeHtml(node.name)}</strong>
+                                    <small style="color: var(--text-muted); display: block;">
+                                        ${escapeHtml(node.country || 'Unknown')} - ${node.status}
+                                    </small>
+                                </div>
+                            </label>
+                        </div>
+                    `).join('');
+                }
+
+                document.getElementById('nodeModal').classList.remove('hidden');
+            } catch (error) {
+                showToast('Failed to load nodes', 'error');
+            }
+        }
+
+        async function saveNodeAssignment() {
+            const planId = document.getElementById('nodePlanId').value;
+            const checkboxes = document.querySelectorAll('.node-checkbox:checked');
+            const nodeIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+            try {
+                const response = await api.assignNodesToPlan(planId, nodeIds);
+                if (response.success) {
+                    showToast('Nodes assigned successfully', 'success');
+                    closeNodeModal();
+                    loadPlans();
+                } else {
+                    showToast('Failed to assign nodes', 'error');
+                }
+            } catch (error) {
+                showToast('Failed to assign nodes', 'error');
+            }
+        }
+
+        // Search
+        document.getElementById('searchInput').addEventListener('input', debounce((e) => {
+            const query = e.target.value.toLowerCase();
+            const filtered = allPlans.filter(p =>
+                p.name.toLowerCase().includes(query) ||
+                p.display_name.toLowerCase().includes(query)
+            );
+            renderPlans(filtered);
+        }, 300));
+
+        // Initial load
+        loadPlans();
+    </script>
+</body>
+
+</html>

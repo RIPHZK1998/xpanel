@@ -1,0 +1,40 @@
+# ============================================
+# xPanel Agent - Production Configuration
+# ============================================
+
+# Node Identification
+# Get the node ID from the panel after creating the node
+node:
+  id: 1
+  name: "node-production"
+
+# Panel Connection
+panel:
+  url: "https://your-panel-domain.com"
+  api_key: "YOUR_NODE_API_KEY_FROM_PANEL_SETTINGS"
+  timeout: 10s
+
+# Xray API Settings
+xray:
+  api_address: "127.0.0.1"
+  api_port: 10085
+
+# File Paths
+files:
+  tls_cert: "/etc/xpanel-agent/server.crt"
+  tls_key: "/etc/xpanel-agent/server.key"
+  geoip: "/usr/local/share/xray/geoip.dat"
+  geosite: "/usr/local/share/xray/geosite.dat"
+  xray_config: "/tmp/xray-config.json"
+
+# Sync Intervals
+intervals:
+  heartbeat: 30s
+  user_sync: 1m
+  traffic_report: 1m
+  activity_report: 30s
+
+# Logging
+logging:
+  level: "info"
+  format: "json"

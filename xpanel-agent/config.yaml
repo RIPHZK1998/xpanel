@@ -1,0 +1,66 @@
+# ============================================
+# xPanel Agent Configuration
+# ============================================
+# This file configures the VPN node agent that connects to the management panel
+# and runs the xray-core VPN service.
+
+# ============================================
+# Node Identification
+# ============================================
+node:
+  id: 3                      # Node ID from the panel (REQUIRED - get from panel Nodes page)
+  name: "US-WEST-2"          # Descriptive name for logging
+
+# ============================================
+# Panel Connection
+# ============================================
+panel:
+  url: "http://127.0.0.1:8081"                    # Panel URL (update for production)
+  api_key: "JlzpSQcTGaIWHyFYxriw5l7x9mHh22PnlrSOMjxI51gUKSAMAz"        # API key (set in panel Settings)
+  timeout: 10s
+
+# ============================================
+# Xray API Settings
+# ============================================
+# Local API for user management and stats collection
+xray:
+  api_address: "127.0.0.1"
+  api_port: 10085
+
+# ============================================
+# File Paths
+# ============================================
+files:
+  # TLS certificates (only needed if using TLS mode - Reality doesn't need certificates)
+  tls_cert: "/tmp/server.crt"
+  tls_key: "/tmp/server.key"
+  
+  # GeoIP databases (optional - for advanced routing)
+  geoip: "/usr/local/share/xray/geoip.dat"
+  geosite: "/usr/local/share/xray/geosite.dat"
+  
+  # Generated xray config output (for debugging)
+  xray_config: "/tmp/xray-config.json"
+
+# ============================================
+# Sync Intervals
+# ============================================
+intervals:
+  heartbeat: 30s           # Node status updates
+  user_sync: 1m            # User list synchronization
+  traffic_report: 1m       # Traffic statistics reporting
+
+# ============================================
+# Logging
+# ============================================
+logging:
+  level: "info"            # debug | info | warn | error
+  format: "json"           # json | text
+
+# ============================================
+# NOTES
+# ============================================
+# - Protocol, port, TLS/Reality settings are configured in the panel
+# - Agent fetches these settings automatically on startup
+# - Reality protocol is recommended (no certificates needed)
+# - For TLS mode, ensure certificate paths are correct

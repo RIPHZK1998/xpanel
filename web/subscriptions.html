@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subscriptions - xPanel</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        .progress-bar {
+            height: 6px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            margin-top: var(--space-xs);
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.3s;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 400px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>xPanel</h2>
+            </div>
+            <nav class="sidebar-nav" id="sidebarNav"></nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">👤</div>
+                    <div class="user-details">
+                        <div class="user-name" id="userEmailSidebar">Admin</div>
+                        <div class="user-role" id="userRoleSidebar">Administrator</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-header">
+                <h1>Subscription Management</h1>
+                <div style="display: flex; align-items: center; gap: var(--space-md);">
+                    <span id="userEmail" style="color: var(--text-secondary); font-size: 0.875rem;"></span>
+                    <button class="btn btn-secondary btn-sm" onclick="api.logout()">
+                        <span>🚪</span> Logout
+                    </button>
+                </div>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-box">
+                    <input type="text" class="input" id="searchInput" placeholder="Search by user email...">
+                </div>
+                <button class="btn btn-secondary" onclick="loadSubscriptions()">🔄 Refresh</button>
+            </div>
+
+            <div class="card">
+                <table class="table" id="subsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Plan</th>
+                            <th>Status</th>
+                            <th>Data Usage</th>
+                            <th>Expires</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="subsTableBody"></tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <!-- Pagination controls could go here -->
+
+    <!-- Extend Modal -->
+    <div id="extendModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Extend Subscription</h3>
+                <button class="modal-close" onclick="closeExtendModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="extendForm">
+                    <input type="hidden" id="extendSubId">
+                    <p class="mb-md">Add days to the current expiration date.</p>
+                    <div class="form-group">
+                        <label class="form-label">Days to Add</label>
+                        <input type="number" class="input" id="extendDays" value="30" min="1" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeExtendModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveExtension()">Extend</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        requireAuth();
+
+        const user = getCurrentUser();
+        const isAdminUser = isAdmin();
+
+        // Populate sidebar user info
+        document.getElementById('userEmailSidebar').textContent = user.email;
+        document.getElementById('userRoleSidebar').innerHTML = isAdminUser ?
+            '<span class="badge badge-success" style="font-size: 0.65rem;">Admin</span>' :
+            '<span class="badge badge-info" style="font-size: 0.65rem;">User</span>';
+
+        // Populate header user email
+        document.getElementById('userEmail').textContent = user.email;
+
+        // Build navigation - all pages accessible
+        const navItems = [
+            { label: 'Dashboard', page: 'dashboard.html', icon: '📊' },
+            { label: 'Users', page: 'users.html', icon: '👥' },
+            { label: 'Plans', page: 'plans.html', icon: '📋' },
+            { label: 'Nodes', page: 'nodes.html', icon: '🌐' },
+            { label: 'Subscriptions', page: 'subscriptions.html', icon: '💎' },
+            { label: 'Settings', page: 'settings.html', icon: '⚙️' },
+        ];
+        const nav = document.getElementById('sidebarNav');
+        navItems.forEach(item => {
+            const navItem = document.createElement('div');
+            navItem.className = 'nav-item' + (window.location.pathname.includes(item.page) ? ' active' : '');
+            navItem.innerHTML = `${item.icon} ${item.label}`;
+            navItem.onclick = () => window.location.href = item.page;
+            nav.appendChild(navItem);
+        });
+
+        // Load subscriptions on page load
+        loadSubscriptions();
+
+        let allSubs = [];
+
+        async function loadSubscriptions() {
+            const tbody = document.getElementById('subsTableBody');
+            showLoading(tbody);
+
+            try {
+                const response = await api.adminGetSubscriptions();
+                if (response.success) {
+                    // Backend returns {subscriptions: [...], total: ...}
+                    allSubs = response.data.subscriptions || [];
+                    renderSubscriptions(allSubs);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No subscriptions found</td></tr>';
+                }
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--error);">Failed to load subscriptions</td></tr>';
+            }
+        }
+
+        function renderSubscriptions(subs) {
+            const tbody = document.getElementById('subsTableBody');
+            if (!subs || subs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No subscriptions found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = subs.map(sub => {
+                const usagePercent = sub.data_limit_bytes > 0 ? (sub.data_used_bytes / sub.data_limit_bytes * 100) : 0;
+                const usageColor = usagePercent > 90 ? 'var(--error)' : (usagePercent > 70 ? 'var(--warning)' : 'var(--primary)');
+
+                return `
+        <tr>
+          <td>${sub.id}</td>
+          <td>${sub.user_email || 'Unknown'}</td>
+          <td><span class="badge badge-info">${sub.plan}</span></td>
+          <td>${getStatusBadge(sub.status)}</td>
+          <td style="min-width: 150px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 2px;">
+              <span>${formatBytes(sub.data_used_bytes || 0)}</span>
+              <span>${formatBytes(sub.data_limit_bytes || 0)}</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${Math.min(usagePercent, 100)}%; background: ${usageColor}"></div>
+            </div>
+          </td>
+          <td>${sub.expires_at ? formatDate(sub.expires_at) : 'Never'}</td>
+          <td>
+            <button class="btn btn-sm btn-primary" onclick="showExtendModal(${sub.id})">Extend</button>
+            <button class="btn btn-sm btn-secondary" onclick="resetData(${sub.id})">Reset Data</button>
+          </td>
+        </tr>
+      `}).join('');
+        }
+
+        function showExtendModal(id) {
+            document.getElementById('extendSubId').value = id;
+            document.getElementById('extendDays').value = 30;
+            document.getElementById('extendModal').classList.remove('hidden');
+        }
+
+        function closeExtendModal() {
+            document.getElementById('extendModal').classList.add('hidden');
+        }
+
+        async function saveExtension() {
+            const id = document.getElementById('extendSubId').value;
+            const days = parseInt(document.getElementById('extendDays').value);
+
+            if (!days || days < 1) {
+                showToast('Please enter a valid number of days', 'error');
+                return;
+            }
+
+            try {
+                const response = await api.adminExtendSubscription(id, days);
+                if (response.success) {
+                    showToast('Subscription extended', 'success');
+                    closeExtendModal();
+                    loadSubscriptions();
+                } else {
+                    showToast(response.message || 'Failed to extend', 'error');
+                }
+            } catch (error) {
+                showToast('Operation failed', 'error');
+            }
+        }
+
+        async function resetData(id) {
+            confirm('Are you sure you want to reset data usage for this subscription?', async () => {
+                try {
+                    const response = await api.adminResetDataUsage(id);
+                    if (response.success) {
+                        showToast('Data usage reset', 'success');
+                        loadSubscriptions();
+                    }
+                } catch (error) {
+                    showToast('Failed to reset data', 'error');
+                }
+            });
+        }
+
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', debounce((e) => {
+            const query = e.target.value.toLowerCase();
+            const filtered = allSubs.filter(sub =>
+                (sub.user_email && sub.user_email.toLowerCase().includes(query)) ||
+                sub.id.toString().includes(query)
+            );
+            renderSubscriptions(filtered);
+        }, 300));
+    </script>
+</body>
+
+</html>

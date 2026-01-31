@@ -1,0 +1,41 @@
+<!-- Quick debug page to test login -->
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Login Debug</title>
+</head>
+
+<body>
+    <h1>Login Debug Test</h1>
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="checkStorage()">Check Storage</button>
+    <pre id="output"></pre>
+
+    <script src="js/api.js"></script>
+    <script>
+        async function testLogin() {
+            const output = document.getElementById('output');
+            output.textContent = 'Logging in...\n';
+
+            try {
+                const result = await api.login('admin@xpanel.local', 'admin123');
+                output.textContent += 'Result: ' + JSON.stringify(result, null, 2) + '\n\n';
+                output.textContent += 'Token in memory: ' + api.token + '\n';
+                output.textContent += 'Token in localStorage: ' + localStorage.getItem('access_token') + '\n';
+            } catch (error) {
+                output.textContent += 'Error: ' + error.message + '\n';
+            }
+        }
+
+        function checkStorage() {
+            const output = document.getElementById('output');
+            output.textContent = 'LocalStorage contents:\n';
+            output.textContent += 'access_token: ' + localStorage.getItem('access_token') + '\n';
+            output.textContent += 'refresh_token: ' + localStorage.getItem('refresh_token') + '\n';
+            output.textContent += 'user: ' + localStorage.getItem('user') + '\n';
+        }
+    </script>
+</body>
+
+</html>
