@@ -323,6 +323,8 @@ func initDatabase(cfg *config.Config, logger *logrus.Logger) (*gorm.DB, error) {
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.Subscription{},
+		&models.SubscriptionPlan{},
+		&models.UserSubscription{},
 		&models.Node{},
 		&models.Device{},
 		&models.TrafficLog{},
