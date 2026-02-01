@@ -327,6 +327,7 @@ func initDatabase(cfg *config.Config, logger *logrus.Logger) (*gorm.DB, error) {
 		&models.Device{},
 		&models.TrafficLog{},
 		&models.UserActivity{},
+		&models.SystemConfig{},
 	); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
