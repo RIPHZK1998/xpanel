@@ -64,7 +64,7 @@ func (h *AdminSubscriptionHandler) ExtendSubscription(c *gin.Context) {
 	}
 
 	// Extend expiration via service
-	sub, err := h.subscriptionService.Extend(sub.UserID, req.Days)
+	sub, err = h.subscriptionService.Extend(sub.UserID, req.Days)
 	if err != nil {
 		response.InternalServerError(c, "failed to extend subscription")
 		return

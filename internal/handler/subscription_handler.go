@@ -68,7 +68,7 @@ func (h *SubscriptionHandler) Renew(c *gin.Context) {
 		return
 	}
 
-	sub, err := h.subscriptionService.Renew(userID, req.Plan)
+	sub, err := h.subscriptionService.Renew(userID, req.PlanID, req.AutoRenew)
 	if err != nil {
 		if err == service.ErrInvalidPlan {
 			response.BadRequest(c, "invalid subscription plan")
