@@ -112,3 +112,15 @@ func (r *ActivityRepository) GetActivitiesForUsers(userIDs []uint) (map[uint]*mo
 	}
 	return result, nil
 }
+
+// CountOnlineUsersByNode counts online users for a specific node.
+func (r *ActivityRepository) CountOnlineUsersByNode(nodeID uint, threshold time.Duration) (int64, error) {
+	var count int64
+	cutoff := time.Now().Add(-threshold)
+
+	err := r.db.Model(&models.UserActivity{}).
+		Where("node_id = ? AND last_seen > ?", nodeID, cutoff).
+		Count(&count).Error
+
+	return count, err
+}

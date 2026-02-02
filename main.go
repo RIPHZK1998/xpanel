@@ -89,8 +89,19 @@ func main() {
 	authService := service.NewAuthService(userRepo, subRepo, planRepo, jwtManager, redisClient)
 	subscriptionService := service.NewSubscriptionService(subRepo, userRepo, planRepo)
 	planService := service.NewPlanService(planRepo, userSubRepo)
+	// Create NodeService before UserService because UserService needs it?
+	// Wait, UserService needs SubscriptionService, not NodeService.
+	// But handlers need them.
+	// Let's check dependencies carefully.
+	// userService := service.NewUserService(userRepo, deviceRepo, subscriptionService)
+	// nodeService := service.NewNodeService(nodeRepo, activityRepo)
+
+	// Original order:
+	// userService := ...
+	// nodeService := ...
+
 	userService := service.NewUserService(userRepo, deviceRepo, subscriptionService)
-	nodeService := service.NewNodeService(nodeRepo)
+	nodeService := service.NewNodeService(nodeRepo, activityRepo)
 	trafficService := service.NewTrafficService(trafficRepo, subRepo, activityRepo)
 	adminService := service.NewAdminService(userRepo, subRepo, userSubRepo, nodeRepo, trafficRepo)
 	nodeAgentService := service.NewNodeAgentService(nodeRepo, userRepo, userSubRepo, trafficRepo)

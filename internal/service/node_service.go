@@ -1,23 +1,46 @@
 package service
 
 import (
+	"time"
 	"xpanel/internal/models"
 	"xpanel/internal/repository"
 )
 
 // NodeService handles node-related business logic.
 type NodeService struct {
-	nodeRepo *repository.NodeRepository
+	nodeRepo     *repository.NodeRepository
+	activityRepo *repository.ActivityRepository
 }
 
 // NewNodeService creates a new node service.
-func NewNodeService(nodeRepo *repository.NodeRepository) *NodeService {
-	return &NodeService{nodeRepo: nodeRepo}
+func NewNodeService(
+	nodeRepo *repository.NodeRepository,
+	activityRepo *repository.ActivityRepository,
+) *NodeService {
+	return &NodeService{
+		nodeRepo:     nodeRepo,
+		activityRepo: activityRepo,
+	}
 }
 
 // GetAllNodes retrieves all VPN nodes.
 func (s *NodeService) GetAllNodes() ([]models.Node, error) {
-	return s.nodeRepo.GetAll()
+	nodes, err := s.nodeRepo.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	// Populate online devices count
+	for i := range nodes {
+		count, err := s.activityRepo.CountOnlineUsersByNode(nodes[i].ID, 2*time.Minute)
+		if err == nil {
+			nodes[i].OnlineDevices = int(count)
+			// Also update CurrentUsers to reflect reality if needed, or just use OnlineDevices for display
+			nodes[i].CurrentUsers = int(count)
+		}
+	}
+
+	return nodes, nil
 }
 
 // GetOnlineNodes retrieves all online nodes.
@@ -32,7 +55,19 @@ func (s *NodeService) GetAvailableNodes() ([]models.Node, error) {
 
 // GetNode retrieves a specific node by ID.
 func (s *NodeService) GetNode(id uint) (*models.Node, error) {
-	return s.nodeRepo.GetByID(id)
+	node, err := s.nodeRepo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Populate online devices count
+	count, err := s.activityRepo.CountOnlineUsersByNode(node.ID, 2*time.Minute)
+	if err == nil {
+		node.OnlineDevices = int(count)
+		node.CurrentUsers = int(count)
+	}
+
+	return node, nil
 }
 
 // CreateNode creates a new VPN node.
