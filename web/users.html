@@ -556,7 +556,7 @@
                         showToast('Password is required for new users', 'error');
                         return;
                     }
-                    const resp = await api.createUser({ email, password, role });
+                    const resp = await api.adminCreateUser({ email, password, role });
                     if (!resp.success) throw new Error(resp.message);
 
                     // Use the ID from the new user for plan assignment
