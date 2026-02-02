@@ -329,7 +329,7 @@
                 const dataLimit = plan.data_limit_bytes || 0;
                 const dataUsed = sub.data_used_bytes || 0;
                 const percentUsed = dataLimit > 0 ? (dataUsed / dataLimit) * 100 : 0;
-                const activity = activityMap[user.id];
+                let activity = activityMap[user.id];
 
                 // Expiry calculation
                 let expiryClass = '';
@@ -346,8 +346,16 @@
                 if (percentUsed > 90) progressClass = 'error';
                 else if (percentUsed > 75) progressClass = 'warning';
 
-                // Connection status
-                const isOnline = activity && activity.is_online;
+                // Connection status - use activityMap first, fallback to user response fields
+                if (!activity && (user.online_devices > 0 || user.last_seen)) {
+                    // Build activity from user response fields
+                    activity = {
+                        is_online: user.online_devices > 0,
+                        last_seen: user.last_seen,
+                        device_count: user.online_devices
+                    };
+                }
+                const isOnline = activity && (activity.is_online || user.online_devices > 0);
                 const connectionText = !activity ? 'Never connected' :
                     (isOnline ? `Online${activity.node_name ? ' • ' + activity.node_name : ''}` :
                         `Last seen: ${formatTimeAgo(new Date(activity.last_seen))}`);

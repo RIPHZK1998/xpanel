@@ -103,7 +103,7 @@ func main() {
 	userService := service.NewUserService(userRepo, deviceRepo, subscriptionService)
 	nodeService := service.NewNodeService(nodeRepo, activityRepo)
 	trafficService := service.NewTrafficService(trafficRepo, subRepo, activityRepo)
-	adminService := service.NewAdminService(userRepo, subRepo, userSubRepo, nodeRepo, trafficRepo)
+	adminService := service.NewAdminService(userRepo, subRepo, userSubRepo, nodeRepo, trafficRepo, activityRepo)
 	nodeAgentService := service.NewNodeAgentService(nodeRepo, userRepo, userSubRepo, trafficRepo)
 	systemConfigService := service.NewSystemConfigService(systemConfigRepo, jwtSecret)
 	activityService := service.NewActivityService(activityRepo, userRepo)

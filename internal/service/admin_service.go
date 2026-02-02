@@ -15,11 +15,12 @@ import (
 
 // AdminService handles admin-related business logic.
 type AdminService struct {
-	userRepo    *repository.UserRepository
-	subRepo     *repository.SubscriptionRepository
-	userSubRepo *repository.UserSubscriptionRepository
-	nodeRepo    *repository.NodeRepository
-	trafficRepo *repository.TrafficRepository
+	userRepo     *repository.UserRepository
+	subRepo      *repository.SubscriptionRepository
+	userSubRepo  *repository.UserSubscriptionRepository
+	nodeRepo     *repository.NodeRepository
+	trafficRepo  *repository.TrafficRepository
+	activityRepo *repository.ActivityRepository
 }
 
 // NewAdminService creates a new admin service.
@@ -29,13 +30,15 @@ func NewAdminService(
 	userSubRepo *repository.UserSubscriptionRepository,
 	nodeRepo *repository.NodeRepository,
 	trafficRepo *repository.TrafficRepository,
+	activityRepo *repository.ActivityRepository,
 ) *AdminService {
 	return &AdminService{
-		userRepo:    userRepo,
-		subRepo:     subRepo,
-		userSubRepo: userSubRepo,
-		nodeRepo:    nodeRepo,
-		trafficRepo: trafficRepo,
+		userRepo:     userRepo,
+		subRepo:      subRepo,
+		userSubRepo:  userSubRepo,
+		nodeRepo:     nodeRepo,
+		trafficRepo:  trafficRepo,
+		activityRepo: activityRepo,
 	}
 }
 
@@ -74,9 +77,29 @@ func (s *AdminService) ListUsers(req *ListUsersRequest) (*ListUsersResponse, err
 		return nil, err
 	}
 
+	// Collect user IDs for activity lookup
+	userIDs := make([]uint, len(users))
+	for i, user := range users {
+		userIDs[i] = user.ID
+	}
+
+	// Fetch activity data for all users
+	activities, _ := s.activityRepo.GetActivitiesForUsers(userIDs)
+
 	userResponses := make([]models.UserResponse, len(users))
 	for i, user := range users {
-		userResponses[i] = user.ToResponse()
+		resp := user.ToResponse()
+
+		// Add activity data if available
+		if activity, ok := activities[user.ID]; ok {
+			// User is considered online if seen within last 2 minutes
+			if time.Since(activity.LastSeen) < 2*time.Minute {
+				resp.OnlineDevices = 1 // At least 1 device online
+			}
+			resp.LastSeen = &activity.LastSeen
+		}
+
+		userResponses[i] = resp
 	}
 
 	return &ListUsersResponse{

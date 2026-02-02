@@ -58,13 +58,15 @@ func (u *User) IsAdmin() bool {
 
 // UserResponse is the safe user data structure for API responses.
 type UserResponse struct {
-	ID           uint                      `json:"id"`
-	Email        string                    `json:"email"`
-	UUID         string                    `json:"uuid"`
-	Role         UserRole                  `json:"role"`
-	Status       UserStatus                `json:"status"`
-	CreatedAt    time.Time                 `json:"created_at"`
-	Subscription *UserSubscriptionResponse `json:"subscription,omitempty"`
+	ID            uint                      `json:"id"`
+	Email         string                    `json:"email"`
+	UUID          string                    `json:"uuid"`
+	Role          UserRole                  `json:"role"`
+	Status        UserStatus                `json:"status"`
+	CreatedAt     time.Time                 `json:"created_at"`
+	Subscription  *UserSubscriptionResponse `json:"subscription,omitempty"`
+	OnlineDevices int                       `json:"online_devices"` // Number of currently online devices
+	LastSeen      *time.Time                `json:"last_seen,omitempty"`
 }
 
 // ToResponse converts User to a safe response structure.
