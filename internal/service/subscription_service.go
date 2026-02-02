@@ -20,33 +20,38 @@ var (
 type SubscriptionService struct {
 	subRepo  *repository.SubscriptionRepository
 	userRepo *repository.UserRepository
+	planRepo *repository.PlanRepository
 }
 
 // NewSubscriptionService creates a new subscription service.
 func NewSubscriptionService(
 	subRepo *repository.SubscriptionRepository,
 	userRepo *repository.UserRepository,
+	planRepo *repository.PlanRepository,
 ) *SubscriptionService {
 	return &SubscriptionService{
 		subRepo:  subRepo,
 		userRepo: userRepo,
+		planRepo: planRepo,
 	}
 }
 
 // GetSubscription retrieves a user's subscription.
-func (s *SubscriptionService) GetSubscription(userID uint) (*models.Subscription, error) {
+func (s *SubscriptionService) GetSubscription(userID uint) (*models.UserSubscription, error) {
 	return s.subRepo.GetByUserID(userID)
 }
 
 // RenewRequest contains subscription renewal data.
 type RenewRequest struct {
-	Plan models.PlanType `json:"plan" binding:"required,oneof=free monthly yearly"`
+	PlanID    uint `json:"plan_id" binding:"required"`
+	AutoRenew bool `json:"auto_renew"`
 }
 
 // Renew renews or upgrades a user's subscription.
-func (s *SubscriptionService) Renew(userID uint, plan models.PlanType) (*models.Subscription, error) {
-	// Validate plan
-	if plan != models.PlanFree && plan != models.PlanMonthly && plan != models.PlanYearly {
+func (s *SubscriptionService) Renew(userID uint, planID uint, autoRenew bool) (*models.UserSubscription, error) {
+	// Get plan details
+	plan, err := s.planRepo.GetByID(planID)
+	if err != nil {
 		return nil, ErrInvalidPlan
 	}
 
@@ -56,11 +61,8 @@ func (s *SubscriptionService) Renew(userID uint, plan models.PlanType) (*models.
 		return nil, err
 	}
 
-	// Get plan details
-	dataLimitGB, durationDays := models.GetPlanDetails(plan)
-	dataLimitBytes := dataLimitGB * 1024 * 1024 * 1024
-
 	var expiresAt *time.Time
+	durationDays := plan.GetDurationDays()
 	if durationDays > 0 {
 		expiry := time.Now().AddDate(0, 0, durationDays)
 		expiresAt = &expiry
@@ -68,20 +70,20 @@ func (s *SubscriptionService) Renew(userID uint, plan models.PlanType) (*models.
 
 	if sub == nil {
 		// Create new subscription
-		sub = &models.Subscription{
-			UserID:         userID,
-			Plan:           plan,
-			Status:         models.SubscriptionActive,
-			DataLimitBytes: dataLimitBytes,
-			StartDate:      time.Now(),
-			ExpiresAt:      expiresAt,
+		sub = &models.UserSubscription{
+			UserID:    userID,
+			PlanID:    plan.ID,
+			Status:    models.SubscriptionActive,
+			StartDate: time.Now(),
+			ExpiresAt: expiresAt,
+			AutoRenew: autoRenew,
 		}
 		if err := s.subRepo.Create(sub); err != nil {
 			return nil, err
 		}
 	} else {
 		// Update existing subscription
-		if err := s.subRepo.Renew(userID, plan, expiresAt, dataLimitBytes); err != nil {
+		if err := s.subRepo.Renew(userID, plan.ID, expiresAt, autoRenew); err != nil {
 			return nil, err
 		}
 		// Refresh subscription data
@@ -91,6 +93,8 @@ func (s *SubscriptionService) Renew(userID uint, plan models.PlanType) (*models.
 		}
 	}
 
+	// Load plan data into sub for return
+	sub.Plan = plan
 	return sub, nil
 }
 
@@ -162,6 +166,6 @@ func (s *SubscriptionService) IsActive(userID uint) (bool, error) {
 }
 
 // GetActiveSubscriptions retrieves all active subscriptions with users.
-func (s *SubscriptionService) GetActiveSubscriptions() ([]models.Subscription, error) {
+func (s *SubscriptionService) GetActiveSubscriptions() ([]models.UserSubscription, error) {
 	return s.subRepo.GetActiveSubscriptions()
 }

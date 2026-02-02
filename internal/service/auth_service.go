@@ -26,6 +26,7 @@ var (
 type AuthService struct {
 	userRepo    *repository.UserRepository
 	subRepo     *repository.SubscriptionRepository
+	planRepo    *repository.PlanRepository
 	jwtManager  *jwt.Manager
 	redisClient *redis.Client
 }
@@ -34,12 +35,14 @@ type AuthService struct {
 func NewAuthService(
 	userRepo *repository.UserRepository,
 	subRepo *repository.SubscriptionRepository,
+	planRepo *repository.PlanRepository,
 	jwtManager *jwt.Manager,
 	redisClient *redis.Client,
 ) *AuthService {
 	return &AuthService{
 		userRepo:    userRepo,
 		subRepo:     subRepo,
+		planRepo:    planRepo,
 		jwtManager:  jwtManager,
 		redisClient: redisClient,
 	}
@@ -92,14 +95,22 @@ func (s *AuthService) Register(req *RegisterRequest) (*models.User, error) {
 		return nil, err
 	}
 
+	// Find free plan
+	freePlan, err := s.planRepo.GetByName("free")
+	if err != nil {
+		// Log error but don't fail hard if free plan is missing, create user without sub
+		// (Or handle graceful fallback)
+		// For now, let's just proceed without subscription or return valid user
+		return user, nil
+	}
+
 	// Create free subscription for new user
-	dataLimitGB, _ := models.GetPlanDetails(models.PlanFree)
-	subscription := &models.Subscription{
-		UserID:         user.ID,
-		Plan:           models.PlanFree,
-		Status:         models.SubscriptionActive,
-		DataLimitBytes: dataLimitGB * 1024 * 1024 * 1024, // Convert GB to bytes
-		StartDate:      time.Now(),
+	subscription := &models.UserSubscription{
+		UserID:    user.ID,
+		PlanID:    freePlan.ID,
+		Status:    models.SubscriptionActive,
+		StartDate: time.Now(),
+		AutoRenew: false,
 	}
 
 	if err := s.subRepo.Create(subscription); err != nil {

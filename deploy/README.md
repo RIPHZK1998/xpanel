@@ -46,7 +46,7 @@ apt update && apt install -y postgresql redis-server
 # Create database
 sudo -u postgres createuser xpanel
 sudo -u postgres createdb -O xpanel xpanel
-sudo -u postgres psql -c "ALTER USER xpanel PASSWORD 'secure_password';"
+sudo -u postgres psql -c "ALTER USER xpanel PASSWORD 'asdasdasdasxx';"
 ```
 
 ### 2. Install Panel

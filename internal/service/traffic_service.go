@@ -9,18 +9,21 @@ import (
 
 // TrafficService handles traffic-related business logic.
 type TrafficService struct {
-	trafficRepo *repository.TrafficRepository
-	subRepo     *repository.SubscriptionRepository
+	trafficRepo  *repository.TrafficRepository
+	subRepo      *repository.SubscriptionRepository
+	activityRepo *repository.ActivityRepository
 }
 
 // NewTrafficService creates a new traffic service.
 func NewTrafficService(
 	trafficRepo *repository.TrafficRepository,
 	subRepo *repository.SubscriptionRepository,
+	activityRepo *repository.ActivityRepository,
 ) *TrafficService {
 	return &TrafficService{
-		trafficRepo: trafficRepo,
-		subRepo:     subRepo,
+		trafficRepo:  trafficRepo,
+		subRepo:      subRepo,
+		activityRepo: activityRepo,
 	}
 }
 
@@ -37,6 +40,10 @@ func (s *TrafficService) RecordTraffic(userID, nodeID uint, uploadBytes, downloa
 	if err := s.trafficRepo.Create(log); err != nil {
 		return err
 	}
+
+	// Update user activity (online status)
+	// We consider them online if they just generated traffic
+	_ = s.activityRepo.UpdateUserActivity(userID, nodeID, time.Now(), true)
 
 	// Update subscription data usage
 	totalBytes := uploadBytes + downloadBytes

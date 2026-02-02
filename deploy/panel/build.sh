@@ -36,7 +36,8 @@ chmod +x "$OUTPUT_DIR/panel/install.sh"
 # Create tarball
 echo "Creating archive..."
 cd "$OUTPUT_DIR"
-tar -czf xpanel-linux-amd64.tar.gz panel/
+tar -czf xpanel-linux-amd64.tar.gz ls
+
 
 echo -e "${GREEN}Build complete!${NC}"
 echo "Output: $OUTPUT_DIR/xpanel-linux-amd64.tar.gz"

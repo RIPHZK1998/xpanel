@@ -46,7 +46,7 @@ files:
 # Sync Intervals
 # ============================================
 intervals:
-  heartbeat: 30s           # Node status updates
+  heartbeat: 20s           # Node status updates
   user_sync: 1m            # User list synchronization
   traffic_report: 1m       # Traffic statistics reporting
 

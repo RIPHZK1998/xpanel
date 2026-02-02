@@ -85,12 +85,13 @@ func main() {
 	activityRepo := repository.NewActivityRepository(db)
 
 	// Initialize services
-	authService := service.NewAuthService(userRepo, subRepo, jwtManager, redisClient)
-	subscriptionService := service.NewSubscriptionService(subRepo, userRepo)
+	// Initialize services
+	authService := service.NewAuthService(userRepo, subRepo, planRepo, jwtManager, redisClient)
+	subscriptionService := service.NewSubscriptionService(subRepo, userRepo, planRepo)
 	planService := service.NewPlanService(planRepo, userSubRepo)
 	userService := service.NewUserService(userRepo, deviceRepo, subscriptionService)
 	nodeService := service.NewNodeService(nodeRepo)
-	trafficService := service.NewTrafficService(trafficRepo, subRepo)
+	trafficService := service.NewTrafficService(trafficRepo, subRepo, activityRepo)
 	adminService := service.NewAdminService(userRepo, subRepo, userSubRepo, nodeRepo, trafficRepo)
 	nodeAgentService := service.NewNodeAgentService(nodeRepo, userRepo, userSubRepo, trafficRepo)
 	systemConfigService := service.NewSystemConfigService(systemConfigRepo, jwtSecret)
@@ -334,9 +335,104 @@ func initDatabase(cfg *config.Config, logger *logrus.Logger) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
+	// Migrate legacy subscriptions to new structure
+	if err := migrateLegacySubscriptions(db, logger); err != nil {
+		logger.Warnf("Failed to migrate legacy subscriptions: %v", err)
+	}
+
 	logger.Info("Database migrations completed")
 
 	return db, nil
+}
+
+func migrateLegacySubscriptions(db *gorm.DB, logger *logrus.Logger) error {
+	// Check if legacy subscriptions exist
+	var legacySubs []models.Subscription
+	// Use raw SQL to avoid model conflicts if model struct is removed later,
+	// but here we know the table exists.
+	if err := db.Find(&legacySubs).Error; err != nil {
+		return nil // Table might be empty or not exist
+	}
+
+	if len(legacySubs) == 0 {
+		return nil
+	}
+
+	logger.Infof("Found %d legacy subscriptions to migrate", len(legacySubs))
+
+	// Get plans map
+	var plans []models.SubscriptionPlan
+	if err := db.Find(&plans).Error; err != nil {
+		return err
+	}
+
+	planMap := make(map[string]uint)
+	for _, p := range plans {
+		// Map simple names to IDs.
+		// Assuming plans "free", "monthly", "yearly" might exist or variants.
+		// If using the dump the user imported, names are "free", "monthly_standard", "annual_premium" etc.
+		// Legacy plan types were "free", "monthly", "yearly".
+
+		// Map legacy enum -> DB plan name
+		// free -> free
+		// monthly -> monthly_standard
+		// yearly -> annual_premium
+
+		planMap[p.Name] = p.ID
+	}
+
+	for _, legacy := range legacySubs {
+		// Check if user already has a new subscription
+		var count int64
+		db.Model(&models.UserSubscription{}).Where("user_id = ?", legacy.UserID).Count(&count)
+		if count > 0 {
+			continue // Already migrated
+		}
+
+		// determine plan ID
+		var planID uint
+		switch legacy.Plan {
+		case models.PlanFree:
+			planID = planMap["free"]
+		case models.PlanMonthly:
+			planID = planMap["monthly_standard"]
+			if planID == 0 {
+				planID = planMap["monthly"]
+			}
+		case models.PlanYearly:
+			planID = planMap["annual_premium"]
+			if planID == 0 {
+				planID = planMap["yearly"]
+			}
+		}
+
+		if planID == 0 {
+			// Fallback to free if plan not found
+			planID = planMap["free"]
+		}
+
+		if planID == 0 {
+			logger.Warnf("Skipping migration for user %d: no matching plan found", legacy.UserID)
+			continue
+		}
+
+		newSub := models.UserSubscription{
+			UserID:        legacy.UserID,
+			PlanID:        planID,
+			Status:        legacy.Status,
+			DataUsedBytes: legacy.DataUsedBytes,
+			StartDate:     legacy.StartDate,
+			ExpiresAt:     legacy.ExpiresAt,
+			CreatedAt:     legacy.CreatedAt,
+			UpdatedAt:     legacy.UpdatedAt,
+		}
+
+		if err := db.Create(&newSub).Error; err != nil {
+			logger.Errorf("Failed to migrate subscription for user %d: %v", legacy.UserID, err)
+		}
+	}
+
+	return nil
 }
 
 // initRedis initializes the Redis client.

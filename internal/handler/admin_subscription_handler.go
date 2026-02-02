@@ -2,7 +2,6 @@ package handler
 
 import (
 	"strconv"
-	"time"
 
 	"xpanel/internal/service"
 	"xpanel/pkg/response"
@@ -64,13 +63,11 @@ func (h *AdminSubscriptionHandler) ExtendSubscription(c *gin.Context) {
 		return
 	}
 
-	// Extend expiration
-	if sub.ExpiresAt != nil {
-		newExpiry := sub.ExpiresAt.AddDate(0, 0, req.Days)
-		sub.ExpiresAt = &newExpiry
-	} else {
-		newExpiry := time.Now().AddDate(0, 0, req.Days)
-		sub.ExpiresAt = &newExpiry
+	// Extend expiration via service
+	sub, err := h.subscriptionService.Extend(sub.UserID, req.Days)
+	if err != nil {
+		response.InternalServerError(c, "failed to extend subscription")
+		return
 	}
 
 	response.OK(c, "subscription extended successfully", gin.H{
