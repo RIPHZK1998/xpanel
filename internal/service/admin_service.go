@@ -217,11 +217,6 @@ func (s *AdminService) GetSystemStats() (*SystemStats, error) {
 	return stats, nil
 }
 
-// ExtendSubscriptionRequest contains subscription extension data.
-type ExtendSubscriptionRequest struct {
-	Days int `json:"days" binding:"required,min=1"`
-}
-
 // ResetDataUsageRequest contains data reset parameters.
 type ResetDataUsageRequest struct {
 	ResetToZero bool `json:"reset_to_zero"`
@@ -370,13 +365,21 @@ func (s *AdminService) GetUserConnectionLinks(userID uint) (*UserLinksResponse, 
 	for _, node := range plan.Nodes {
 		// Import the proxy package functionality inline to avoid circular dependency
 		// We'll generate the link directly here
+
+		// For Reality, use RealityServerNames as SNI; otherwise use regular SNI
+		sni := node.SNI
+		if node.RealityEnabled && node.RealityServerNames != "" {
+			// Use first server name from Reality settings
+			sni = extractFirstServerName(node.RealityServerNames)
+		}
+
 		link := generateNodeLink(
 			user.UUID,
 			node.Address,
 			node.Port,
 			string(node.Protocol),
 			node.Name,
-			node.SNI,
+			sni,
 			node.RealityEnabled,
 			node.RealityPublicKey,
 			extractFirstShortID(node.RealityShortIds),
@@ -490,6 +493,17 @@ func extractFirstShortID(shortIds string) string {
 		return ""
 	}
 	parts := strings.Split(shortIds, ",")
+	if len(parts) > 0 {
+		return strings.TrimSpace(parts[0])
+	}
+	return ""
+}
+
+func extractFirstServerName(serverNames string) string {
+	if serverNames == "" {
+		return ""
+	}
+	parts := strings.Split(serverNames, ",")
 	if len(parts) > 0 {
 		return strings.TrimSpace(parts[0])
 	}

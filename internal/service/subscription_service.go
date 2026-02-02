@@ -169,3 +169,30 @@ func (s *SubscriptionService) IsActive(userID uint) (bool, error) {
 func (s *SubscriptionService) GetActiveSubscriptions() ([]models.UserSubscription, error) {
 	return s.subRepo.GetActiveSubscriptions()
 }
+
+// ExtendSubscriptionRequest contains subscription extension data.
+type ExtendSubscriptionRequest struct {
+	Days int `json:"days" binding:"required,min=1"`
+}
+
+// Extend extends a subscription's expiry by a number of days.
+func (s *SubscriptionService) Extend(userID uint, days int) (*models.UserSubscription, error) {
+	sub, err := s.subRepo.GetByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if sub.ExpiresAt == nil {
+		// If no expiry (unlimited), set from now
+		t := time.Now().AddDate(0, 0, days)
+		sub.ExpiresAt = &t
+	} else {
+		t := sub.ExpiresAt.AddDate(0, 0, days)
+		sub.ExpiresAt = &t
+	}
+
+	if err := s.subRepo.Update(sub); err != nil {
+		return nil, err
+	}
+	return sub, nil
+}
