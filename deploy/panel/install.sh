@@ -1,15 +1,26 @@
 #!/bin/bash
 #
 # xPanel - Panel Server Installation Script
-# Tested on: Ubuntu 22.04 LTS
+# One-line install: curl -sSL https://raw.githubusercontent.com/RIPHZK1998/xpanel/main/deploy/panel/install.sh | sudo bash
 #
 set -e
 
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Configuration
+REPO_URL="https://github.com/RIPHZK1998/xpanel.git"
+INSTALL_DIR="/opt/xpanel"
+CONFIG_DIR="/etc/xpanel"
+DATA_DIR="/var/lib/xpanel"
+LOG_DIR="/var/log/xpanel"
+USER="xpanel"
+GROUP="xpanel"
+GO_VERSION="1.22.0"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  xPanel - Panel Server Installer      ${NC}"
@@ -21,47 +32,64 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Configuration
-INSTALL_DIR="/opt/xpanel"
-CONFIG_DIR="/etc/xpanel"
-DATA_DIR="/var/lib/xpanel"
-LOG_DIR="/var/log/xpanel"
-USER="xpanel"
-GROUP="xpanel"
-
-# Parse arguments
-BINARY_PATH=""
-SKIP_DB=false
+# Parse command-line arguments
+DB_HOST="localhost"
+DB_PORT="5432"
+DB_USER=""
+DB_PASSWORD=""
+DB_NAME="xpanel"
+REDIS_HOST="localhost"
+REDIS_PORT="6379"
+SERVER_PORT="8080"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --binary)
-            BINARY_PATH="$2"
-            shift 2
-            ;;
-        --skip-db)
-            SKIP_DB=true
-            shift
-            ;;
-        *)
-            echo "Unknown option: $1"
-            exit 1
-            ;;
+        --db-host) DB_HOST="$2"; shift 2 ;;
+        --db-port) DB_PORT="$2"; shift 2 ;;
+        --db-user) DB_USER="$2"; shift 2 ;;
+        --db-password) DB_PASSWORD="$2"; shift 2 ;;
+        --db-name) DB_NAME="$2"; shift 2 ;;
+        --redis-host) REDIS_HOST="$2"; shift 2 ;;
+        --redis-port) REDIS_PORT="$2"; shift 2 ;;
+        --port) SERVER_PORT="$2"; shift 2 ;;
+        *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
-# Check for binary
-if [ -z "$BINARY_PATH" ]; then
-    echo -e "${YELLOW}Usage: $0 --binary /path/to/xpanel [--skip-db]${NC}"
-    exit 1
+# Interactive prompts for missing required values
+if [ -z "$DB_USER" ]; then
+    read -p "PostgreSQL username [xpanel]: " DB_USER
+    DB_USER=${DB_USER:-xpanel}
 fi
 
-if [ ! -f "$BINARY_PATH" ]; then
-    echo -e "${RED}Binary not found: $BINARY_PATH${NC}"
-    exit 1
+if [ -z "$DB_PASSWORD" ]; then
+    read -sp "PostgreSQL password: " DB_PASSWORD
+    echo
+    if [ -z "$DB_PASSWORD" ]; then
+        echo -e "${RED}Password cannot be empty${NC}"
+        exit 1
+    fi
 fi
 
-echo -e "\n${GREEN}[1/7] Creating system user...${NC}"
+echo -e "\n${GREEN}[1/8] Installing dependencies...${NC}"
+apt-get update -qq
+apt-get install -y -qq git curl wget unzip > /dev/null
+
+echo -e "\n${GREEN}[2/8] Installing Go ${GO_VERSION}...${NC}"
+if ! command -v go &> /dev/null || [[ "$(go version)" != *"go${GO_VERSION}"* ]]; then
+    wget -q "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -O /tmp/go.tar.gz
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf /tmp/go.tar.gz
+    rm /tmp/go.tar.gz
+    export PATH=$PATH:/usr/local/go/bin
+    echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile.d/go.sh
+    echo "Go ${GO_VERSION} installed"
+else
+    echo "Go already installed: $(go version)"
+fi
+export PATH=$PATH:/usr/local/go/bin
+
+echo -e "\n${GREEN}[3/8] Creating system user...${NC}"
 if ! id "$USER" &>/dev/null; then
     useradd --system --no-create-home --shell /usr/sbin/nologin "$USER"
     echo "Created user: $USER"
@@ -69,31 +97,65 @@ else
     echo "User $USER already exists"
 fi
 
-echo -e "\n${GREEN}[2/7] Creating directories...${NC}"
-mkdir -p "$INSTALL_DIR/web"
-mkdir -p "$CONFIG_DIR"
-mkdir -p "$DATA_DIR"
-mkdir -p "$LOG_DIR"
-chown -R "$USER:$GROUP" "$DATA_DIR" "$LOG_DIR"
-
-echo -e "\n${GREEN}[3/7] Installing binary...${NC}"
-cp "$BINARY_PATH" "$INSTALL_DIR/xpanel"
-chmod +x "$INSTALL_DIR/xpanel"
-echo "Installed: $INSTALL_DIR/xpanel"
-
-echo -e "\n${GREEN}[4/7] Copying web files...${NC}"
-if [ -d "$(dirname "$BINARY_PATH")/web" ]; then
-    cp -r "$(dirname "$BINARY_PATH")/web/"* "$INSTALL_DIR/web/"
-    echo "Copied web files to $INSTALL_DIR/web/"
+echo -e "\n${GREEN}[4/8] Cloning/updating repository...${NC}"
+if [ -d "$INSTALL_DIR/.git" ]; then
+    cd "$INSTALL_DIR"
+    git fetch origin
+    git reset --hard origin/main
+    echo "Updated existing installation"
 else
-    echo -e "${YELLOW}Warning: Web directory not found, skipping...${NC}"
+    rm -rf "$INSTALL_DIR"
+    git clone "$REPO_URL" "$INSTALL_DIR"
+    echo "Cloned repository"
 fi
 
-echo -e "\n${GREEN}[5/7] Installing systemd service...${NC}"
+echo -e "\n${GREEN}[5/8] Building xPanel...${NC}"
+cd "$INSTALL_DIR"
+CGO_ENABLED=0 go build -ldflags="-s -w" -o xpanel .
+chmod +x xpanel
+echo "Built: $INSTALL_DIR/xpanel"
+
+echo -e "\n${GREEN}[6/8] Setting up directories...${NC}"
+mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"
+chown -R "$USER:$GROUP" "$DATA_DIR" "$LOG_DIR"
+
+echo -e "\n${GREEN}[7/8] Creating configuration...${NC}"
+if [ ! -f "$CONFIG_DIR/.env" ]; then
+    cat > "$CONFIG_DIR/.env" << EOF
+# Server Configuration
+SERVER_HOST=0.0.0.0
+SERVER_PORT=${SERVER_PORT}
+SERVER_MODE=release
+
+# Database Configuration
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_USER=${DB_USER}
+DB_PASSWORD=${DB_PASSWORD}
+DB_NAME=${DB_NAME}
+DB_SSLMODE=disable
+
+# Redis Configuration
+REDIS_HOST=${REDIS_HOST}
+REDIS_PORT=${REDIS_PORT}
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# JWT Configuration (auto-generated on first startup)
+JWT_ACCESS_TTL_MINUTES=15
+JWT_REFRESH_TTL_HOURS=168
+EOF
+    chmod 600 "$CONFIG_DIR/.env"
+    chown "$USER:$GROUP" "$CONFIG_DIR/.env"
+    echo "Created configuration: $CONFIG_DIR/.env"
+else
+    echo "Configuration already exists, skipping..."
+fi
+
+echo -e "\n${GREEN}[8/8] Installing systemd service...${NC}"
 cat > /etc/systemd/system/xpanel.service << 'EOF'
 [Unit]
 Description=xPanel - VPN User Management Panel
-Documentation=https://github.com/yourorg/xpanel
 After=network.target postgresql.service redis.service
 Wants=postgresql.service redis.service
 
@@ -107,72 +169,21 @@ ExecStart=/opt/xpanel/xpanel
 Restart=always
 RestartSec=10
 
-# Logging
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=xpanel
 
-# Security
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/xpanel /var/log/xpanel
+ReadWritePaths=/var/lib/xpanel /var/log/xpanel /opt/xpanel
 
 [Install]
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-echo "Installed: /etc/systemd/system/xpanel.service"
-
-echo -e "\n${GREEN}[6/7] Creating configuration...${NC}"
-if [ ! -f "$CONFIG_DIR/.env" ]; then
-    cat > "$CONFIG_DIR/.env" << 'EOF'
-# Server Configuration
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8080
-SERVER_MODE=release
-
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=xpanel
-DB_PASSWORD=CHANGE_ME_SECURE_PASSWORD
-DB_NAME=xpanel
-DB_SSLMODE=disable
-
-# Redis Configuration
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_DB=0
-
-# JWT Configuration (auto-generated on first startup)
-JWT_ACCESS_TTL_MINUTES=15
-JWT_REFRESH_TTL_HOURS=168
-
-# Note: NODE_API_KEY is auto-generated on first startup
-# View and change it from Settings page in admin panel
-EOF
-    chmod 600 "$CONFIG_DIR/.env"
-    chown "$USER:$GROUP" "$CONFIG_DIR/.env"
-    echo -e "${YELLOW}IMPORTANT: Edit $CONFIG_DIR/.env with your settings!${NC}"
-else
-    echo "Configuration already exists, skipping..."
-fi
-
-echo -e "\n${GREEN}[7/7] Post-installation steps...${NC}"
-
-if [ "$SKIP_DB" = false ]; then
-    echo ""
-    echo -e "${YELLOW}Database Setup Required:${NC}"
-    echo "  1. Install PostgreSQL: apt install postgresql"
-    echo "  2. Install Redis: apt install redis-server"
-    echo "  3. Create database:"
-    echo "     sudo -u postgres createuser xpanel"
-    echo "     sudo -u postgres createdb -O xpanel xpanel"
-    echo "     sudo -u postgres psql -c \"ALTER USER xpanel PASSWORD 'your_password';\""
-fi
+echo "Installed systemd service"
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
@@ -180,12 +191,17 @@ echo -e "${GREEN}  Installation Complete!               ${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "Next steps:"
-echo "  1. Edit configuration: nano $CONFIG_DIR/.env"
-echo "  2. Start service: systemctl start xpanel"
-echo "  3. Enable on boot: systemctl enable xpanel"
-echo "  4. Check logs: journalctl -u xpanel -f"
+echo "  1. Ensure PostgreSQL and Redis are running"
+echo "  2. Create database:"
+echo "     sudo -u postgres createuser ${DB_USER}"
+echo "     sudo -u postgres createdb -O ${DB_USER} ${DB_NAME}"
+echo "     sudo -u postgres psql -c \"ALTER USER ${DB_USER} PASSWORD '***';\""
 echo ""
-echo "Default admin login:"
+echo "  3. Start service: systemctl start xpanel"
+echo "  4. Enable on boot: systemctl enable xpanel"
+echo "  5. Access panel: http://YOUR_IP:${SERVER_PORT}"
+echo ""
+echo -e "${CYAN}Default admin login:${NC}"
 echo "  Email: admin@xpanel.local"
 echo "  Password: admin123"
 echo ""

@@ -1,16 +1,23 @@
 #!/bin/bash
 #
-# xPanel Agent - Node Agent Installation Script
-# Tested on: Ubuntu 22.04 LTS, Debian 12
+# xPanel Agent - Node Installation Script
+# One-line install: curl -sSL https://raw.githubusercontent.com/RIPHZK1998/xpanel/main/deploy/agent/install.sh | sudo bash -s -- --node-id 1 --panel-url https://panel.example.com --api-key YOUR_KEY
 #
 set -e
 
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
+
+# Configuration
+REPO_URL="https://github.com/RIPHZK1998/xpanel.git"
+INSTALL_DIR="/opt/xpanel-agent"
+CONFIG_DIR="/etc/xpanel-agent"
+XRAY_DIR="/usr/local/share/xray"
+GO_VERSION="1.22.0"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  xPanel Agent - Node Installer        ${NC}"
@@ -22,62 +29,66 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Configuration
-INSTALL_DIR="/opt/xpanel-agent"
-CONFIG_DIR="/etc/xpanel-agent"
-XRAY_DIR="/usr/local/share/xray"
-
 # Parse arguments
-BINARY_PATH=""
+NODE_ID=""
 PANEL_URL=""
 API_KEY=""
-NODE_ID=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --binary)
-            BINARY_PATH="$2"
-            shift 2
-            ;;
-        --panel-url)
-            PANEL_URL="$2"
-            shift 2
-            ;;
-        --api-key)
-            API_KEY="$2"
-            shift 2
-            ;;
-        --node-id)
-            NODE_ID="$2"
-            shift 2
-            ;;
-        *)
-            echo "Unknown option: $1"
-            exit 1
-            ;;
+        --node-id) NODE_ID="$2"; shift 2 ;;
+        --panel-url) PANEL_URL="$2"; shift 2 ;;
+        --api-key) API_KEY="$2"; shift 2 ;;
+        *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
-# Validate required arguments
-if [ -z "$BINARY_PATH" ]; then
-    echo -e "${YELLOW}Usage: $0 --binary /path/to/xpanel-agent --node-id <ID> --panel-url <URL> --api-key <KEY>${NC}"
-    exit 1
+# Interactive prompts for missing values
+if [ -z "$NODE_ID" ]; then
+    read -p "Node ID (from panel): " NODE_ID
+    if [ -z "$NODE_ID" ]; then
+        echo -e "${RED}Node ID is required${NC}"
+        exit 1
+    fi
 fi
 
-if [ ! -f "$BINARY_PATH" ]; then
-    echo -e "${RED}Binary not found: $BINARY_PATH${NC}"
-    exit 1
+if [ -z "$PANEL_URL" ]; then
+    read -p "Panel URL (e.g., https://panel.example.com): " PANEL_URL
+    if [ -z "$PANEL_URL" ]; then
+        echo -e "${RED}Panel URL is required${NC}"
+        exit 1
+    fi
 fi
 
-echo -e "\n${GREEN}[1/6] Creating directories...${NC}"
-mkdir -p "$INSTALL_DIR"
-mkdir -p "$CONFIG_DIR"
-mkdir -p "$XRAY_DIR"
+if [ -z "$API_KEY" ]; then
+    read -sp "API Key (from panel Settings): " API_KEY
+    echo
+    if [ -z "$API_KEY" ]; then
+        echo -e "${RED}API Key is required${NC}"
+        exit 1
+    fi
+fi
 
-echo -e "\n${GREEN}[2/6] Installing xray-core...${NC}"
+echo -e "\n${GREEN}[1/7] Installing dependencies...${NC}"
+apt-get update -qq
+apt-get install -y -qq git curl wget unzip > /dev/null
+
+echo -e "\n${GREEN}[2/7] Installing Go ${GO_VERSION}...${NC}"
+if ! command -v go &> /dev/null; then
+    wget -q "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -O /tmp/go.tar.gz
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf /tmp/go.tar.gz
+    rm /tmp/go.tar.gz
+    export PATH=$PATH:/usr/local/go/bin
+    echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile.d/go.sh
+    echo "Go ${GO_VERSION} installed"
+else
+    echo "Go already installed: $(go version)"
+fi
+export PATH=$PATH:/usr/local/go/bin
+
+echo -e "\n${GREEN}[3/7] Installing xray-core...${NC}"
 if ! command -v xray &> /dev/null; then
-    echo "Installing xray-core..."
-    # Download latest xray-core
     ARCH=$(uname -m)
     case $ARCH in
         x86_64) XRAY_ARCH="64" ;;
@@ -90,18 +101,15 @@ if ! command -v xray &> /dev/null; then
     
     echo "Downloading xray-core ${XRAY_VERSION}..."
     curl -sL "$XRAY_URL" -o /tmp/xray.zip
+    mkdir -p /tmp/xray
     unzip -q /tmp/xray.zip -d /tmp/xray
     
     mv /tmp/xray/xray /usr/local/bin/xray
     chmod +x /usr/local/bin/xray
     
-    # Install geoip/geosite
-    if [ -f /tmp/xray/geoip.dat ]; then
-        mv /tmp/xray/geoip.dat "$XRAY_DIR/"
-    fi
-    if [ -f /tmp/xray/geosite.dat ]; then
-        mv /tmp/xray/geosite.dat "$XRAY_DIR/"
-    fi
+    mkdir -p "$XRAY_DIR"
+    [ -f /tmp/xray/geoip.dat ] && mv /tmp/xray/geoip.dat "$XRAY_DIR/"
+    [ -f /tmp/xray/geosite.dat ] && mv /tmp/xray/geosite.dat "$XRAY_DIR/"
     
     rm -rf /tmp/xray /tmp/xray.zip
     echo "xray-core installed: $(xray version | head -1)"
@@ -109,65 +117,66 @@ else
     echo "xray-core already installed: $(xray version | head -1)"
 fi
 
-echo -e "\n${GREEN}[3/6] Installing agent binary...${NC}"
-cp "$BINARY_PATH" "$INSTALL_DIR/xpanel-agent"
-chmod +x "$INSTALL_DIR/xpanel-agent"
-echo "Installed: $INSTALL_DIR/xpanel-agent"
+echo -e "\n${GREEN}[4/7] Cloning/updating repository...${NC}"
+TEMP_DIR="/tmp/xpanel-build"
+rm -rf "$TEMP_DIR"
+git clone --depth 1 "$REPO_URL" "$TEMP_DIR"
 
-echo -e "\n${GREEN}[4/6] Creating configuration...${NC}"
+echo -e "\n${GREEN}[5/7] Building xPanel Agent...${NC}"
+cd "$TEMP_DIR/xpanel-agent"
+CGO_ENABLED=0 go build -ldflags="-s -w" -o xpanel-agent .
+mkdir -p "$INSTALL_DIR"
+mv xpanel-agent "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/xpanel-agent"
+rm -rf "$TEMP_DIR"
+echo "Built: $INSTALL_DIR/xpanel-agent"
+
+echo -e "\n${GREEN}[6/7] Creating configuration...${NC}"
+mkdir -p "$CONFIG_DIR"
 if [ ! -f "$CONFIG_DIR/config.yaml" ]; then
     cat > "$CONFIG_DIR/config.yaml" << EOF
-# ============================================
 # xPanel Agent Configuration
-# ============================================
 
-# Node Identification
 node:
-  id: ${NODE_ID:-1}
+  id: ${NODE_ID}
   name: "$(hostname)"
 
-# Panel Connection
 panel:
-  url: "${PANEL_URL:-http://your-panel-server:8080}"
-  api_key: "${API_KEY:-YOUR_API_KEY_HERE}"
+  url: "${PANEL_URL}"
+  api_key: "${API_KEY}"
   timeout: 10s
 
-# Xray API Settings
 xray:
   api_address: "127.0.0.1"
   api_port: 10085
 
-# File Paths
 files:
   tls_cert: "/etc/xpanel-agent/server.crt"
   tls_key: "/etc/xpanel-agent/server.key"
-  geoip: "$XRAY_DIR/geoip.dat"
-  geosite: "$XRAY_DIR/geosite.dat"
+  geoip: "${XRAY_DIR}/geoip.dat"
+  geosite: "${XRAY_DIR}/geosite.dat"
   xray_config: "/tmp/xray-config.json"
 
-# Sync Intervals
 intervals:
   heartbeat: 30s
   user_sync: 1m
   traffic_report: 1m
   activity_report: 30s
 
-# Logging
 logging:
   level: "info"
   format: "json"
 EOF
     chmod 600 "$CONFIG_DIR/config.yaml"
-    echo -e "${YELLOW}IMPORTANT: Edit $CONFIG_DIR/config.yaml with correct settings!${NC}"
+    echo "Created configuration: $CONFIG_DIR/config.yaml"
 else
     echo "Configuration already exists, skipping..."
 fi
 
-echo -e "\n${GREEN}[5/6] Installing systemd service...${NC}"
+echo -e "\n${GREEN}[7/7] Installing systemd service...${NC}"
 cat > /etc/systemd/system/xpanel-agent.service << 'EOF'
 [Unit]
 Description=xPanel Node Agent
-Documentation=https://github.com/yourorg/xpanel
 After=network.target
 
 [Service]
@@ -178,16 +187,12 @@ ExecStart=/opt/xpanel-agent/xpanel-agent -config /etc/xpanel-agent/config.yaml
 Restart=always
 RestartSec=10
 
-# Logging
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=xpanel-agent
 
-# Security (root needed for xray)
 NoNewPrivileges=false
 PrivateTmp=true
-
-# Resource limits
 LimitNOFILE=1048576
 LimitNPROC=512
 
@@ -195,13 +200,9 @@ LimitNPROC=512
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-echo "Installed: /etc/systemd/system/xpanel-agent.service"
 
-echo -e "\n${GREEN}[6/6] Final setup...${NC}"
-
-# Open common VPN ports (if ufw is installed)
+# Open VPN port
 if command -v ufw &> /dev/null; then
-    echo "Configuring firewall..."
     ufw allow 443/tcp comment 'xpanel-agent VPN' 2>/dev/null || true
 fi
 
@@ -210,17 +211,16 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  Installation Complete!               ${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "Next steps:"
-echo "  1. Edit configuration: nano $CONFIG_DIR/config.yaml"
-echo "     - Set correct node.id (from panel)"
-echo "     - Set panel.url (your panel server address)"
-echo "     - Set panel.api_key (from panel Settings)"
+echo "Configuration:"
+echo "  Node ID: ${NODE_ID}"
+echo "  Panel URL: ${PANEL_URL}"
 echo ""
-echo "  2. Start service: systemctl start xpanel-agent"
-echo "  3. Enable on boot: systemctl enable xpanel-agent"
-echo "  4. Check logs: journalctl -u xpanel-agent -f"
+echo "Next steps:"
+echo "  1. Start service: systemctl start xpanel-agent"
+echo "  2. Enable on boot: systemctl enable xpanel-agent"
+echo "  3. Check logs: journalctl -u xpanel-agent -f"
 echo ""
 echo -e "${CYAN}Tips:${NC}"
-echo "  - Node configuration (protocol, port, TLS/Reality) is managed from the panel"
+echo "  - Node settings (protocol, port, TLS/Reality) are managed from the panel"
 echo "  - Reality protocol is recommended (no certificates needed)"
-echo "  - For TLS mode, place certificates in $CONFIG_DIR/"
+echo "  - Edit config: nano $CONFIG_DIR/config.yaml"

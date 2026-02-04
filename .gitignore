@@ -1,4 +1,6 @@
 .env
 /bin
-
+dist/
+*.db
+xpanel.db
 .DS_Store
